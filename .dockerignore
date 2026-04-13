@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Environments
+enlivenv
+venv
+env
+.env
+.venv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+
+# Frontend (preventing duplicate copy if context is broad)
+frontend/node_modules
+frontend/dist
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+docker-compose*.yml
+.dockerignore
+Dockerfile
+
+# Project Specific
+django_cron.log
+*.sqlite3
+db.sqlite3
