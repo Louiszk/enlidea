@@ -1,9 +1,0 @@
-{
-  "dependencies": {
-    "@tanstack/react-query": "^5.51.23",
-    "react-markdown-editor-lite": "^1.3.4",
-    "react-router-dom": "^6.25.1",
-    "sanitize-markdown": "^2.6.7",
-    "snarkdown": "^2.0.0"
-  }
-}
