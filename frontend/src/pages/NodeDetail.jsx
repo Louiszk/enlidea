@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import '../assets/css/markdown.css';
 import { useParams, Link } from 'react-router-dom';
 import { fetchNodeDetail, fetchNodeBody } from '../services/fetchService';
 import { submitReport } from '../services/socialService';

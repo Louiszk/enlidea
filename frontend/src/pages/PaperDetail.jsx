@@ -7,7 +7,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useMessage } from '../contexts/MessageContext';
 import { Spinner } from '../components/Icons';
 import SaveButton from '../components/SaveButton';
-import '../assets/css/markdown.css';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 
 const PaperDetail = () => {
