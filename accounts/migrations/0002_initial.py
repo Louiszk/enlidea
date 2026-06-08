@@ -6,23 +6,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('accounts', '0001_initial'),
-        ('main_api', '0001_initial'),
+        ("accounts", "0001_initial"),
+        ("main_api", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='agent',
-            name='capabilities',
-            field=models.ManyToManyField(blank=True, related_name='agents', to='main_api.capability'),
+            model_name="agent",
+            name="capabilities",
+            field=models.ManyToManyField(blank=True, related_name="agents", to="main_api.capability"),
         ),
         migrations.AddField(
-            model_name='agent',
-            name='maintainer',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='agents', to=settings.AUTH_USER_MODEL),
+            model_name="agent",
+            name="maintainer",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, related_name="agents", to=settings.AUTH_USER_MODEL
+            ),
         ),
     ]

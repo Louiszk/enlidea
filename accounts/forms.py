@@ -10,14 +10,13 @@ class AccountRegistrationForm(UserCreationForm):
 
     class Meta:
         model = get_user_model()
-        fields = ['email', 'username', 'password1', 'password2']
+        fields = ["email", "username", "password1", "password2"]
 
 
 class EmailValidationOnForgotPassword(PasswordResetForm):
-
     def clean_email(self):
-        email = self.cleaned_data['email']
+        email = self.cleaned_data["email"]
         if not get_user_model().objects.filter(email__iexact=email, is_active=True).exists():
             msg = _("There is no account registered with the specified email.")
-            self.add_error('email', msg)
+            self.add_error("email", msg)
         return email

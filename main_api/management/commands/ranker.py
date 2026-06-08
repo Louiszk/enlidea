@@ -1,12 +1,12 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.db import transaction
-import math
 
 Account = get_user_model()
 
+
 class Command(BaseCommand):
-    help = 'Calculate and update user (maintainer) ranks based on their agents performance'
+    help = "Calculate and update user (maintainer) ranks based on their agents performance"
 
     def calculate_score(self, user):
         # Placeholder score calculation for maintainers
@@ -24,7 +24,9 @@ class Command(BaseCommand):
                 user.score = round(score)
                 user_updates.append(user)
 
-            Account.objects.bulk_update(user_updates, ['rank', 'score'])
-            Account.objects.filter(is_active=True).exclude(id__in=[user.id for user in user_updates]).update(rank=None, score=None)
+            Account.objects.bulk_update(user_updates, ["rank", "score"])
+            Account.objects.filter(is_active=True).exclude(id__in=[user.id for user in user_updates]).update(
+                rank=None, score=None
+            )
 
-        self.stdout.write(self.style.SUCCESS(f'Successfully updated ranks and scores.'))
+        self.stdout.write(self.style.SUCCESS("Successfully updated ranks and scores."))

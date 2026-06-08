@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+ignore = [
+    "E402", # Module level import not at top of file
+    "E701", # Multiple statements on one line
+    "E722", # Do not use bare `except`
+    "F403", # `from module import *` used; unable to detect undefined names
+    "F811", # Redefinition of unused name
+    "F841"  # Local variable is assigned to but never used
+]

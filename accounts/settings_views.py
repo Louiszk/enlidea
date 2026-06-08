@@ -9,23 +9,32 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .serializers import PersonalInformationSerializer, ProfileSerializer
 from django.contrib.auth import authenticate
-from .settings_helpers import check_password_attempts, increment_password_attempts, reset_password_attempts, can_update_personal_information, update_last_successful_update_time, set_last_profile_update, can_update_profile
+from .settings_helpers import (
+    check_password_attempts,
+    increment_password_attempts,
+    reset_password_attempts,
+    can_update_personal_information,
+    update_last_successful_update_time,
+    set_last_profile_update,
+    can_update_profile,
+)
 from main_api.tasks import send_async_verification_email
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes, force_str
-import os
 from django.contrib.auth import get_user_model
 
 from django.core import signing
 from decouple import config
 
+
 def sign_email(email):
-    return signing.dumps(email, salt=config('SIGNING_KEY'))
+    return signing.dumps(email, salt=config("SIGNING_KEY"))
+
 
 def unsign_email(signed_email):
     try:
-        email = signing.loads(signed_email, salt=config('SIGNING_KEY'), max_age=86400)
+        email = signing.loads(signed_email, salt=config("SIGNING_KEY"), max_age=86400)
         return email
     except signing.BadSignature:
         return None
@@ -36,46 +45,63 @@ def send_verification_email(request, account, new_email):
     token = default_token_generator.make_token(account)
     signed_email = sign_email(new_email)
     verification_link = f"{settings.FRONTEND_URL}/verify-email/{uidb64}/{token}/{signed_email}"
-    
+
     send_async_verification_email.delay(account.id, new_email, verification_link)
     return True
 
-@api_view(['PUT'])
+
+@api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def personal_information(request):
     user = request.user
 
     if not can_update_personal_information(user):
-        return Response({"error": "You can only update personal information once every 8 hours."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"error": "You can only update personal information once every 8 hours."}, status=status.HTTP_403_FORBIDDEN
+        )
     if not check_password_attempts(user):
-        return Response({"error": "Too many failed attempts. Updating personal information locked for 12 hours."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"error": "Too many failed attempts. Updating personal information locked for 12 hours."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
-    serializer = PersonalInformationSerializer(user, data=request.data, partial=True, context={'request': request})
-    
+    serializer = PersonalInformationSerializer(user, data=request.data, partial=True, context={"request": request})
+
     if not serializer.is_valid():
         return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    current_password = serializer.validated_data.get('current_password')
+    current_password = serializer.validated_data.get("current_password")
 
     if not authenticate(username=user.email, password=current_password):
         attempts = increment_password_attempts(user)
         if attempts <= 3:
-            return Response({"error": f"Current password is incorrect. You have {attempts} attempt{'s' if attempts > 1 else ''} left."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "error": f"Current password is incorrect. You have {attempts} attempt{'s' if attempts > 1 else ''} left."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         else:
             return Response({"error": "Current password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
 
     reset_password_attempts(user)
     update_last_successful_update_time(user)
 
-    new_email = serializer.validated_data.get('email')
+    new_email = serializer.validated_data.get("email")
     if new_email != user.email:
         send_verification_email(request, user, new_email)
-        return Response({"message": "We have sent you an validation link at your new email. If you cannot verify your email, it will stay as before."}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "message": "We have sent you an validation link at your new email. If you cannot verify your email, it will stay as before."
+            },
+            status=status.HTTP_200_OK,
+        )
     serializer.save()
 
     return Response({"message": "Personal information updated successfully."}, status=status.HTTP_200_OK)
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def verify_email(request, uidb64, token, signed_email):
@@ -85,7 +111,9 @@ def verify_email(request, uidb64, token, signed_email):
         user = User.objects.get(pk=uid)
         new_email = unsign_email(signed_email)
         if new_email is None:
-            return Response({"error":"Invalid or expired email verification link."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid or expired email verification link."}, status=status.HTTP_400_BAD_REQUEST
+            )
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
 
@@ -93,38 +121,41 @@ def verify_email(request, uidb64, token, signed_email):
         # Verify that the new email is not already in use
         if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
             return Response({"error": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # Update the user's email
         user.email = new_email
-        user.save(update_fields=['email'])
+        user.save(update_fields=["email"])
         return Response({"message": "Email successfully verified and updated."}, status=status.HTTP_200_OK)
     else:
         return Response({"error": "Invalid verification link."}, status=status.HTTP_400_BAD_REQUEST)
-    
-@api_view(['DELETE'])
+
+
+@api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_account(request):
-    password = request.data.get('password')
+    password = request.data.get("password")
     user = request.user
 
     # Authenticate the user
     if not authenticate(username=user.email, password=password):
-        return Response({'error': 'Invalid password'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Invalid password"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         # Delete the user account
         user.delete()
-        return Response({'message': 'Account deleted successfully'}, status=status.HTTP_200_OK)
+        return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def update_profile(request):
     user = request.user
     if not can_update_profile(user):
-        return Response({"error": "You can only update your profile once every 8 hours."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"error": "You can only update your profile once every 8 hours."}, status=status.HTTP_403_FORBIDDEN
+        )
     serializer = ProfileSerializer(instance=user, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.save()
