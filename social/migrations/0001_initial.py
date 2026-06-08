@@ -7,74 +7,188 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('accounts', '0002_initial'),
-        ('contenttypes', '0002_remove_content_type_name'),
-        ('main_api', '0001_initial'),
+        ("accounts", "0002_initial"),
+        ("contenttypes", "0002_remove_content_type_name"),
+        ("main_api", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Complaint',
+            name="Complaint",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('category', models.CharField(choices=[('auto_kick_dispute', 'Auto-Kick Dispute'), ('platform_issue', 'Platform Issue'), ('transaction_issue', 'Transaction Issue'), ('other', 'Other')], max_length=30)),
-                ('description', models.TextField(validators=[django.core.validators.MaxLengthValidator(5000)])),
-                ('reference_id', models.CharField(blank=True, help_text='Related Node ID or Report ID', max_length=100, null=True)),
-                ('status', models.CharField(choices=[('open', 'Open'), ('reviewing', 'Reviewing'), ('resolved', 'Resolved'), ('rejected', 'Rejected')], default='open', max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='complaints', to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "category",
+                    models.CharField(
+                        choices=[
+                            ("auto_kick_dispute", "Auto-Kick Dispute"),
+                            ("platform_issue", "Platform Issue"),
+                            ("transaction_issue", "Transaction Issue"),
+                            ("other", "Other"),
+                        ],
+                        max_length=30,
+                    ),
+                ),
+                ("description", models.TextField(validators=[django.core.validators.MaxLengthValidator(5000)])),
+                (
+                    "reference_id",
+                    models.CharField(blank=True, help_text="Related Node ID or Report ID", max_length=100, null=True),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("open", "Open"),
+                            ("reviewing", "Reviewing"),
+                            ("resolved", "Resolved"),
+                            ("rejected", "Rejected"),
+                        ],
+                        default="open",
+                        max_length=20,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="complaints",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Notification',
+            name="Notification",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('notification_type', models.CharField(choices=[('new_follower', 'New Follower'), ('node_saved', 'Node Saved'), ('peer_review_received', 'Peer Review Received'), ('high_views', 'High Views'), ('assignment_received', 'Research Assignment'), ('payout_received', 'Bounty Payout Received'), ('custom', 'Custom Notification')], max_length=20)),
-                ('verb', models.CharField(max_length=255)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('is_read', models.BooleanField(default=False)),
-                ('actor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
-                ('recipient', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='notifications', to=settings.AUTH_USER_MODEL)),
-                ('research_node', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='main_api.researchnode')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "notification_type",
+                    models.CharField(
+                        choices=[
+                            ("new_follower", "New Follower"),
+                            ("node_saved", "Node Saved"),
+                            ("peer_review_received", "Peer Review Received"),
+                            ("high_views", "High Views"),
+                            ("assignment_received", "Research Assignment"),
+                            ("payout_received", "Bounty Payout Received"),
+                            ("custom", "Custom Notification"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("verb", models.CharField(max_length=255)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("is_read", models.BooleanField(default=False)),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
+                    ),
+                ),
+                (
+                    "recipient",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="notifications",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "research_node",
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to="main_api.researchnode"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='Report',
+            name="Report",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('object_id', models.PositiveIntegerField()),
-                ('reason', models.CharField(choices=[('spam', 'Spam'), ('harassment', 'Harassment'), ('inappropriate', 'Inappropriate Content'), ('plagiarism_or_copyright', 'Plagiarism or Copyright'), ('malicious_activity', 'Malicious Activity'), ('other', 'Other')], max_length=30)),
-                ('description', models.TextField(validators=[django.core.validators.MaxLengthValidator(5000)])),
-                ('node_id', models.PositiveIntegerField(blank=True, help_text='Contextual ResearchNode ID', null=True)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('action_taken', 'Action Taken'), ('dismissed', 'Dismissed'), ('dismissed_as_abuse', 'Dismissed as Abuse')], default='pending', max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('content_type', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.contenttype')),
-                ('reporter_account', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reports_submitted', to=settings.AUTH_USER_MODEL)),
-                ('reporter_agent', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reports_submitted', to='accounts.agent')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("object_id", models.PositiveIntegerField()),
+                (
+                    "reason",
+                    models.CharField(
+                        choices=[
+                            ("spam", "Spam"),
+                            ("harassment", "Harassment"),
+                            ("inappropriate", "Inappropriate Content"),
+                            ("plagiarism_or_copyright", "Plagiarism or Copyright"),
+                            ("malicious_activity", "Malicious Activity"),
+                            ("other", "Other"),
+                        ],
+                        max_length=30,
+                    ),
+                ),
+                ("description", models.TextField(validators=[django.core.validators.MaxLengthValidator(5000)])),
+                ("node_id", models.PositiveIntegerField(blank=True, help_text="Contextual ResearchNode ID", null=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("action_taken", "Action Taken"),
+                            ("dismissed", "Dismissed"),
+                            ("dismissed_as_abuse", "Dismissed as Abuse"),
+                        ],
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "content_type",
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="contenttypes.contenttype"),
+                ),
+                (
+                    "reporter_account",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="reports_submitted",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "reporter_agent",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="reports_submitted",
+                        to="accounts.agent",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Appreciation',
+            name="Appreciation",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('vote', models.IntegerField(choices=[(-2, '-2'), (-1, '-1'), (1, '+1'), (2, '+2')])),
-                ('impact', models.DecimalField(decimal_places=4, max_digits=12)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('paper', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='appreciations', to='main_api.paper')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("vote", models.IntegerField(choices=[(-2, "-2"), (-1, "-1"), (1, "+1"), (2, "+2")])),
+                ("impact", models.DecimalField(decimal_places=4, max_digits=12)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "paper",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="appreciations", to="main_api.paper"
+                    ),
+                ),
+                ("user", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
             options={
-                'unique_together': {('user', 'paper')},
+                "unique_together": {("user", "paper")},
             },
         ),
     ]

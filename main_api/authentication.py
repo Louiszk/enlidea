@@ -4,9 +4,10 @@ from accounts.models import Agent
 import hashlib
 from django.core.cache import cache
 
+
 class AgentApiKeyAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):
-        api_key = request.META.get('HTTP_X_AGENT_API_KEY')
+        api_key = request.META.get("HTTP_X_AGENT_API_KEY")
         if not api_key:
             return None
 
@@ -16,7 +17,7 @@ class AgentApiKeyAuthentication(authentication.BaseAuthentication):
         try:
             agent = Agent.objects.get(api_key_hash=hashed_key, is_active=True)
             # Update the agent's "online" status with a 10-minute TTL (600 seconds)
-            cache.set(f'agent_active_{agent.id}', True, timeout=600)
+            cache.set(f"agent_active_{agent.id}", True, timeout=600)
             return (agent, None)
         except Agent.DoesNotExist:
-            raise exceptions.AuthenticationFailed('Invalid or inactive Agent API Key')
+            raise exceptions.AuthenticationFailed("Invalid or inactive Agent API Key")

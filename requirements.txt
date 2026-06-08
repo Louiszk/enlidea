@@ -102,3 +102,4 @@ wcwidth==0.6.0
 websockets==16.0
 whitenoise==6.12.0
 zipp==3.23.0
+ruff==0.15.12

@@ -23,88 +23,88 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 # Application definition
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv())
 
 INSTALLED_APPS = [
-    'accounts',
-    'main_api',
-    'social',
-    'corsheaders',
-    'rest_framework',
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.sites',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "accounts",
+    "main_api",
+    "social",
+    "corsheaders",
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.sites",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
 ]
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
         },
     },
 }
 
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'accounts.authentication.CookieJWTAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.CookieJWTAuthentication",
     ],
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-        'main_api.throttling.StandardAgentScopedThrottle',
-        'main_api.throttling.PublicAgentIndividualThrottle',
-        'main_api.throttling.PublicAgentGlobalThrottle',
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "main_api.throttling.StandardAgentScopedThrottle",
+        "main_api.throttling.PublicAgentIndividualThrottle",
+        "main_api.throttling.PublicAgentGlobalThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '500/hour',
-        'user': '2000/hour',
-        'username_check': '30/minute',
-        'agent_action': '5/minute',
-        'agent_read': '60/minute',
-        'public_agent_individual': '30/minute',
-        'public_agent_global': '500/minute',
-    }
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "500/hour",
+        "user": "2000/hour",
+        "username_check": "30/minute",
+        "agent_action": "5/minute",
+        "agent_read": "60/minute",
+        "public_agent_individual": "30/minute",
+        "public_agent_global": "500/minute",
+    },
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=240),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': config('SIGNING_KEY'),
-    'VERIFYING_KEY': None,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'JTI_CLAIM': 'jti',
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=240),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": config("SIGNING_KEY"),
+    "VERIFYING_KEY": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "JTI_CLAIM": "jti",
 }
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'enlidea.urls'
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
+ROOT_URLCONF = "enlidea.urls"
+CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", cast=Csv())
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 43200
@@ -112,21 +112,21 @@ CORS_PREFLIGHT_MAX_AGE = 43200
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'enlidea.wsgi.application'
+WSGI_APPLICATION = "enlidea.wsgi.application"
 
 
 # Password validation
@@ -134,16 +134,16 @@ WSGI_APPLICATION = 'enlidea.wsgi.application'
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -159,9 +159,9 @@ SITE_ID = 1
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -169,58 +169,58 @@ USE_L10N = True
 
 USE_TZ = True
 
-DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
 
 # Celery Configuration
-CELERY_BROKER_URL = config('CELERY_BROKER_URL')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND')
-CELERY_TIMEZONE = 'UTC'
+CELERY_BROKER_URL = config("CELERY_BROKER_URL")
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND")
+CELERY_TIMEZONE = "UTC"
 
 CELERY_BEAT_SCHEDULE = {
-    'task_sweep_stale_reviews': {
-        'task': 'main_api.tasks.task_sweep_stale_reviews',
-        'schedule': timedelta(minutes=30),
+    "task_sweep_stale_reviews": {
+        "task": "main_api.tasks.task_sweep_stale_reviews",
+        "schedule": timedelta(minutes=30),
     },
-    'task_sweep_deadlines': {
-        'task': 'main_api.tasks.task_sweep_deadlines',
-        'schedule': timedelta(minutes=10),
+    "task_sweep_deadlines": {
+        "task": "main_api.tasks.task_sweep_deadlines",
+        "schedule": timedelta(minutes=10),
     },
-    'task_fill_counsel_shortages': {
-        'task': 'main_api.tasks.task_fill_counsel_shortages',
-        'schedule': timedelta(hours=2),
+    "task_fill_counsel_shortages": {
+        "task": "main_api.tasks.task_fill_counsel_shortages",
+        "schedule": timedelta(hours=2),
     },
 }
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',
+    BASE_DIR / "static",
 ]
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
-AUTH_USER_MODEL = 'accounts.Account'
+AUTH_USER_MODEL = "accounts.Account"
 
-LOGIN_REDIRECT_URL = '/'
-LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = "/"
+LOGIN_URL = "login"
 
 AUTHENTICATION_BACKENDS = [
-    'accounts.backends.AuthBackend',
-    'django.contrib.auth.backends.ModelBackend',
+    "accounts.backends.AuthBackend",
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = config('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-FRONTEND_URL = config('FRONTEND_URL')
+EMAIL_HOST_USER = config("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
+FRONTEND_URL = config("FRONTEND_URL")
 MAILER_EMAIL_BACKEND = EMAIL_BACKEND
 
 # Security: Request & Upload Limits

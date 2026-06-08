@@ -1,18 +1,18 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useCallback } from 'react';
 
 const MessageContext = createContext();
 
 export const MessageProvider = ({ children }) => {
   const [message, setMessage] = useState(null);
 
-  const addMessage = (newMessage) => {
+  const removeMessage = useCallback(() => {
+    setMessage(null);
+  }, []);
+
+  const addMessage = useCallback((newMessage) => {
     setMessage(newMessage);
     setTimeout(removeMessage, 3800);
-  };
-
-  const removeMessage = () => {
-    setMessage(null);
-  };
+  }, [removeMessage]);
 
   return (
     <MessageContext.Provider value={{ message, addMessage, removeMessage }}>

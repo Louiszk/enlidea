@@ -29,7 +29,7 @@ const Header = () => {
     };
   }, []);
 
-  const handleLinkClick = (event) => {
+  const handleLinkClick = (_event) => {
     setIsMobileMenuOpen(false);
   };
 

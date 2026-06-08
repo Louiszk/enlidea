@@ -1,12 +1,72 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getNotifications, markNotificationsAsRead } from '../services/socialService';
 import { FulfillmentIcon, SavedIcon, VisitsIcon, FollowerIcon, RatedIcon, CustomIcon } from './Icons';
+
+const getGroupKey = (notification) => {
+  switch (notification.notification_type) {
+    case 'new_follower':
+      return 'new_follower';
+    case 'node_saved':
+    case 'node_bought':
+    case 'peer_review_received':
+      return `${notification.notification_type}_${notification.research_node?.id}`;
+    default:
+      return notification.id;
+  }
+};
+
+const getGroupedVerb = (type, count) => {
+  switch (type) {
+    case 'new_follower':
+      return count === 1 ? 'started following you' : `${count} users started following you`;
+    case 'node_saved':
+      return count === 1 ? 'saved your research node' : `${count} users saved your research node`;
+    case 'assignment_received':
+      return 'received a new research assignment';
+    case 'payout_received':
+      return 'received a bounty payout';
+    case 'peer_review_received':
+      return count === 1 ? 'peer reviewed your node' : `${count} agents peer reviewed your node`;
+    default:
+      return '';
+  }
+};
+
+const groupNotifications = (notifications) => {
+  const grouped = {};
+  notifications.forEach(notification => {
+    const key = getGroupKey(notification);
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
+    grouped[key].push(notification);
+  });
+  return Object.values(grouped).map(group => {
+    const first = group[0];
+    return {
+      ...first,
+      count: group.length,
+      verb: getGroupedVerb(first.notification_type, group.length),
+    };
+  });
+};
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const data = await getNotifications();
+      const groupedNotifications = groupNotifications(data);
+      setNotifications(groupedNotifications);
+      setUnreadCount(groupedNotifications.filter(n => !n.is_read).length);
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  }, []);
 
   useEffect(() => {
     fetchNotifications();
@@ -19,67 +79,7 @@ const Notifications = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
-
-  const fetchNotifications = async () => {
-    try {
-      const data = await getNotifications();
-      const groupedNotifications = groupNotifications(data);
-      setNotifications(groupedNotifications);
-      setUnreadCount(groupedNotifications.filter(n => !n.is_read).length);
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error);
-    }
-  };
-
-  const groupNotifications = (notifications) => {
-    const grouped = {};
-    notifications.forEach(notification => {
-      const key = getGroupKey(notification);
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-      grouped[key].push(notification);
-    });
-    return Object.values(grouped).map(group => {
-      const first = group[0];
-      return {
-        ...first,
-        count: group.length,
-        verb: getGroupedVerb(first.notification_type, group.length),
-      };
-    });
-  };
-
-  const getGroupKey = (notification) => {
-    switch (notification.notification_type) {
-      case 'new_follower':
-        return 'new_follower';
-      case 'node_saved':
-      case 'node_bought':
-      case 'peer_review_received':
-        return `${notification.notification_type}_${notification.research_node?.id}`;
-      default:
-        return notification.id;
-    }
-  };
-
-  const getGroupedVerb = (type, count) => {
-    switch (type) {
-      case 'new_follower':
-        return count === 1 ? 'started following you' : `${count} users started following you`;
-      case 'node_saved':
-        return count === 1 ? 'saved your research node' : `${count} users saved your research node`;
-      case 'assignment_received':
-        return 'received a new research assignment';
-      case 'payout_received':
-        return 'received a bounty payout';
-      case 'peer_review_received':
-        return count === 1 ? 'peer reviewed your node' : `${count} agents peer reviewed your node`;
-      default:
-        return '';
-    }
-  };
+  }, [fetchNotifications]);
 
   const handleToggle = async () => {
     setIsOpen(!isOpen);
@@ -156,5 +156,3 @@ const Notifications = () => {
 };
 
 export default Notifications;
-
-

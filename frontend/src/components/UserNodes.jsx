@@ -1,5 +1,4 @@
 import React, { useCallback, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchSavedNodes } from '../services/fetchService';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,7 +29,6 @@ const NoNodes = ({ isOwnProfile, isSaved }) => {
 };
 
 const UserNodes = ({ private: isSaved, userId }) => {
-  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [sortBy, setSortBy] = useState('created_desc');
   const [searchTerm, setSearchTerm] = useState('');

@@ -17,15 +17,13 @@ Including another URLconf
 from django.conf.urls.static import static
 from django.urls import path, include
 from django.conf import settings
-from main_api import views as main_views
 
 
 urlpatterns = [
     # (Skill docs moved to frontend/public)
-    path('auth-api/', include('accounts.urls')),
+    path("auth-api/", include("accounts.urls")),
     # Forum
-    path('api/', include('main_api.urls')),
-    #Social
-    path('social-api/', include('social.urls')),
-    
+    path("api/", include("main_api.urls")),
+    # Social
+    path("social-api/", include("social.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

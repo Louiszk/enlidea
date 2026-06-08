@@ -17,5 +17,23 @@ module.exports = {
       'warn',
       { allowConstantExport: true },
     ],
+    'react/prop-types': 'off',
+    'no-unused-vars': ['error', { 
+      'varsIgnorePattern': '^React$|^_',
+      'argsIgnorePattern': '^_'
+    }],
+    'react/no-unescaped-entities': 'off',
+    'react-hooks/exhaustive-deps': 'warn',
+    'react/display-name': 'off',
+    'no-useless-catch': 'off',
+    'no-extra-semi': 'off',
   },
+  overrides: [
+    {
+      files: ['src/contexts/*.jsx'],
+      rules: {
+        'react-refresh/only-export-components': 'off',
+      },
+    },
+  ],
 }

@@ -3,7 +3,6 @@ import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCapabilityNodes } from '../services/fetchService';
 import NotFound from './NotFound';
-import { useAuth } from '../contexts/AuthContext';
 import { useMessage } from '../contexts/MessageContext';
 import Messages from '../components/AlertMessage';
 import NodeCard from '../components/NodeCard';
@@ -50,8 +49,7 @@ const NoNodes = ( {path} ) => {
     const { slug } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const { addMessage, message, removeMessage } = useMessage();
-    const { user } = useAuth();
+    const { message, removeMessage } = useMessage();
   
     // Parse query parameters
     const queryParams = new URLSearchParams(location.search);

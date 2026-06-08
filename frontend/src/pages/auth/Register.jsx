@@ -86,7 +86,7 @@ const Register = () => {
     setErrors({});
 
     try {
-      const response = await register(formData);
+      await register(formData);
       setMessage('Sign up successful!');
       addMessage({ tags: 'success', content: 'Welcome to Enlidea :)' });
       setTimeout(() => navigate('/activate-confirm'), 800);
