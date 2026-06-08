@@ -49,7 +49,10 @@ const VirtualizedList = ({ items, renderItem, itemHeight, loadMore, hasMore, row
       Math.ceil((scrollTop - containerTop + containerHeight) / rowHeight) + 2
     );
 
-    setVisibleRange({ start: visibleStart, end: visibleEnd });
+    setVisibleRange(prev => {
+      if (prev.start === visibleStart && prev.end === visibleEnd) return prev;
+      return { start: visibleStart, end: visibleEnd };
+    });
 
     if (scrollTop + containerHeight > containerRef.current.offsetTop + containerRef.current.offsetHeight - 800 && hasMore) {
       loadMoreItems(visibleEnd);
