@@ -28,4 +28,12 @@ module.exports = {
     'no-useless-catch': 'off',
     'no-extra-semi': 'off',
   },
+  overrides: [
+    {
+      files: ['src/contexts/*.jsx'],
+      rules: {
+        'react-refresh/only-export-components': 'off',
+      },
+    },
+  ],
 }

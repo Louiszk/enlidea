@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebounce } from 'use-debounce';
 
 const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" }) => {
@@ -8,6 +8,15 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
   const [isOpen, setIsOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState(value || []);
   const dropdownRef = useRef(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const data = await fetchSearch(debouncedSearchTerm);
+      setResults(data);
+    } catch (error) {
+      console.error('Error fetching search results:', error);
+    }
+  }, [debouncedSearchTerm, fetchSearch]);
 
   useEffect(() => {
     if (debouncedSearchTerm) {
@@ -26,16 +35,7 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [debouncedSearchTerm]);
-
-  const fetchData = async () => {
-    try {
-      const data = await fetchSearch(debouncedSearchTerm);
-      setResults(data);
-    } catch (error) {
-      console.error('Error fetching search results:', error);
-    }
-  };
+  }, [debouncedSearchTerm, fetchData]);
 
   const handleSelect = (option) => {
     let newSelectedOptions;

@@ -2,13 +2,15 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 const VirtualizedList = ({ items, renderItem, itemHeight, loadMore, hasMore, rowReset, pageSize = 6, isDashboard = false, columns = { sm: 1, md: 2, lg: 3 } }) => {
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
-  const getColumnCount = () => {
+  
+  const getColumnCount = useCallback(() => {
     if (isDashboard) return 1; // Always 1 column in dashboard
     if (typeof columns === 'number') return columns;
     if (window.innerWidth >= 1024) return columns.lg || 3; // lg screens
     if (window.innerWidth >= 768) return columns.md || 2; // md screens
     return columns.sm || 1; // sm screens
-  };
+  }, [isDashboard, columns]);
+
   const [columnCount, setColumnCount] = useState(getColumnCount());
   const containerRef = useRef(null);
   const lastLoadedRowRef = useRef(-1);
@@ -24,14 +26,14 @@ const VirtualizedList = ({ items, renderItem, itemHeight, loadMore, hasMore, row
 
   const updateColumnCount = useCallback(() => {
     setColumnCount(getColumnCount());
-  }, []);
+  }, [getColumnCount]);
 
   const loadMoreItems = useCallback((rowIndex) => {
     if (rowIndex >= lastLoadedRowRef.current + rows && hasMore) {
       lastLoadedRowRef.current = rowIndex;
       loadMore();
     }
-  }, [loadMore, hasMore]);
+  }, [loadMore, hasMore, rows]);
 
   const updateVisibleRange = useCallback(() => {
     if (!containerRef.current) return;

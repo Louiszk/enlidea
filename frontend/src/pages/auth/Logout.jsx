@@ -18,7 +18,7 @@ const Logout = () => {
       }};
 
     performLogout();
-  }, [logout]);
+  }, [logout, addMessage]);
 
   if (logoutLoading) return <Spinner />
   if (logoutError) return <div className='bg-gray-800 h-96 flex items-center justify-center'><SadFace /></div>
