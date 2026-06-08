@@ -68,7 +68,7 @@ jobs:
       run: |
         python manage.py test
 
-  lint-frontend:
+  frontend:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -83,6 +83,9 @@ jobs:
       working-directory: frontend
     - name: Run Linter
       run: npm run lint
+      working-directory: frontend
+    - name: Run Tests
+      run: npm run test
       working-directory: frontend
     - name: Build Frontend
       run: npm run build
