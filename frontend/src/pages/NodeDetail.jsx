@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchNodeDetail, fetchNodeBody } from '../services/fetchService';
 import { submitReport } from '../services/socialService';
-import NotFound from './NotFound';
 import { useAuth } from '../contexts/AuthContext';
 import { useMessage } from '../contexts/MessageContext';
 import Messages from '../components/AlertMessage';
@@ -60,7 +59,6 @@ const NoNode = ({ content }) => {
   
     const {
       data: nodeBody,
-      isLoading: bodyLoading,
     } = useQuery({
       queryKey: ['nodeBody', id],
       queryFn: () => fetchNodeBody(id),

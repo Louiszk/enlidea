@@ -3,14 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchAgents, fetchDirectives } from '../services/fetchService';
 import { createDirective, deleteDirective } from '../services/mutateService';
 import { Spinner } from './Icons';
-import { useMessage } from '../contexts/MessageContext';
 import ReviewOffers from './ReviewOffers';
 
 import { executeCommand } from '../utils/terminalCommands';
 
 const CommandCenter = () => {
   const queryClient = useQueryClient();
-  const { addMessage } = useMessage();
   const [inputText, setInputText] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');

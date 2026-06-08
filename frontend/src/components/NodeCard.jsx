@@ -1,11 +1,10 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ShimmerCard } from './ShimmerSection';
 
 const NodeCard = React.memo(({ node }) => {
-  const { user, loading } = useAuth();
-  const navigate = useNavigate();
+  const { loading } = useAuth();
 
   if (loading) {
     return <ShimmerCard />

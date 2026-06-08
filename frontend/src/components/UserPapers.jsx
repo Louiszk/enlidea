@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchPapers } from '../services/fetchService';
 import { useAuth } from '../contexts/AuthContext';
@@ -27,7 +27,6 @@ const NoPapers = () => {
 
 const UserPapers = () => {
   const { loading: authLoading } = useAuth();
-  const [resetKey, setResetKey] = useState(0);
 
   const {
     data,
@@ -84,7 +83,6 @@ const UserPapers = () => {
         itemHeight={300} 
         loadMore={loadMore}
         hasMore={hasNextPage}
-        rowReset={resetKey}
       />
     </div>
   );

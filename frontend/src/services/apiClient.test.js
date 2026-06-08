@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { getMediaUrl, API_BASE_URL } from './apiClient';
 
 describe('apiClient utilities', () => {

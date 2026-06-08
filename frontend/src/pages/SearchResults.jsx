@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useLocation, Link } from 'react-router-dom';
 import { fetchSearchResults } from '../services/fetchService';
@@ -35,7 +35,6 @@ const SearchResults = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const query = searchParams.get('q');
-  const [resetKey, setResetKey] = useState(0);
 
   const {
     data,
@@ -182,7 +181,6 @@ const SearchResults = () => {
           itemHeight={356}
           loadMore={loadMore}
           hasMore={hasNextPage}
-          rowReset={resetKey}
         />
       </div>
       )}

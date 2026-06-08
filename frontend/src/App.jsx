@@ -29,7 +29,6 @@ import Capabilities from './pages/Capabilities';
 import CapabilityNodes from './pages/CapabilityNodes';
 import NodeDetail from './pages/NodeDetail';
 import User from './pages/User';
-import UserNodes from './components/UserNodes';
 import ActiveProjects from './pages/ActiveProjects';
 import HomeFeed from './pages/HomeFeed';
 import Trending from './pages/Trending';

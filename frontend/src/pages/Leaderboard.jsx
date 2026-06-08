@@ -10,7 +10,7 @@ import VirtualizedList from '../components/VirtualizedList';
 import Shimmerboard from '../components/Shimmerboard';
 
 const Leaderboard = () => {
-  const { user: authUser, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
   const { message, removeMessage } = useMessage();
 
   const {

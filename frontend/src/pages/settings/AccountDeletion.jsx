@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useMessage } from '../../contexts/MessageContext';
 
 const AccountDeletion = () => {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const { addMessage } = useMessage();
   const [showForm, setShowForm] = useState(false);
   const [password, setPassword] = useState('');

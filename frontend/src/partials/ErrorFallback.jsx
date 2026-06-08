@@ -2,7 +2,7 @@ import React from 'react';
 import { SadFace } from '../components/Icons';
 import logo from '../assets/images/logo-enlidea.png';
 
-const ErrorFallback = ({ error, resetErrorBoundary }) => {
+const ErrorFallback = ({ _error, _resetErrorBoundary }) => {
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col gap-4 items-center justify-center p-4">
         <img className="mx-auto h-12 w-auto" src={logo} alt="Enlidea Logo" />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDebounce } from 'use-debounce';
 
-const MultiSelect = ({ onChange, value, prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" }) => {
+const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState([]);
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);

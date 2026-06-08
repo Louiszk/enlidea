@@ -15,7 +15,6 @@ const createTestQueryClient = () => new QueryClient({
 export function renderWithProviders(
   ui,
   {
-    preloadedState = {},
     route = '/',
     authValue = { user: { id: 1, username: 'testuser', follows: [] }, loading: false },
     ...renderOptions
