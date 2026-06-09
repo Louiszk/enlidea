@@ -1,7 +1,8 @@
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
@@ -31,6 +32,41 @@ TREASURY_USERNAME = "System_Treasury"
 APPRECIATION_BS_REWARD = Decimal("2.0000")
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="AppreciatePaperRequest",
+        fields={
+            "vote": serializers.IntegerField(),
+        },
+    ),
+    responses={
+        200: inline_serializer(
+            name="AppreciatePaperResponse",
+            fields={
+                "appreciation_score": serializers.FloatField(),
+                "user_vote": serializers.IntegerField(),
+            },
+        ),
+        400: inline_serializer(
+            name="AppreciatePaperBadRequest",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        403: inline_serializer(
+            name="AppreciatePaperForbidden",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        404: inline_serializer(
+            name="AppreciatePaperNotFound",
+            fields={
+                "detail": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def appreciate_paper(request, paper_id):
@@ -98,6 +134,29 @@ def appreciate_paper(request, paper_id):
     return Response({"appreciation_score": total_score, "user_vote": vote}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: inline_serializer(
+            name="FollowUserResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="FollowUserBadRequest",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        404: inline_serializer(
+            name="FollowUserNotFound",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def follow_user(request, user_id):
@@ -117,6 +176,23 @@ def follow_user(request, user_id):
         return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: inline_serializer(
+            name="UnfollowUserResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        404: inline_serializer(
+            name="UnfollowUserNotFound",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def unfollow_user(request, user_id):
@@ -128,6 +204,7 @@ def unfollow_user(request, user_id):
         return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
+@extend_schema(request=None, responses=FollowSerializer(many=True))
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_follows(request):
@@ -137,6 +214,23 @@ def get_follows(request):
     return Response(serializer.data)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="page",
+            description="Page number",
+            required=False,
+            type=int,
+        )
+    ],
+    responses=inline_serializer(
+        name="HomeFeedResponse",
+        fields={
+            "nodes": ResearchNodeCardSerializer(many=True),
+            "nextPage": serializers.IntegerField(allow_null=True),
+        },
+    ),
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def home_feed(request, user_id):
@@ -166,6 +260,7 @@ def home_feed(request, user_id):
     return Response({"nodes": serializer.data, "nextPage": next_page}, status=status.HTTP_200_OK)
 
 
+@extend_schema(request=None, responses=NotificationSerializer(many=True))
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_notifications(request):
@@ -174,6 +269,17 @@ def get_notifications(request):
     return Response(serializer.data)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: inline_serializer(
+            name="MarkNotificationsAsReadResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        )
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def mark_notifications_as_read(request):
@@ -181,6 +287,24 @@ def mark_notifications_as_read(request):
     return Response({"message": "All notifications marked as read"}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: inline_serializer(
+            name="SaveNodeResponse",
+            fields={
+                "message": serializers.CharField(),
+                "saved": serializers.BooleanField(),
+            },
+        ),
+        404: inline_serializer(
+            name="SaveNodeNotFound",
+            fields={
+                "detail": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def save_node(request, node_id):
@@ -205,6 +329,24 @@ def save_node(request, node_id):
     return Response({"message": message, "saved": is_saved}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: inline_serializer(
+            name="SavePaperResponse",
+            fields={
+                "message": serializers.CharField(),
+                "saved": serializers.BooleanField(),
+            },
+        ),
+        404: inline_serializer(
+            name="SavePaperNotFound",
+            fields={
+                "detail": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def save_paper(request, paper_id):
@@ -229,6 +371,22 @@ def save_paper(request, paper_id):
     return Response({"message": message, "saved": is_saved}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="page",
+            description="Page number",
+            required=False,
+            type=int,
+        )
+    ],
+    responses=inline_serializer(
+        name="LeaderboardResponse",
+        fields={
+            "agents": AgentSerializer(many=True),
+        },
+    ),
+)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -254,6 +412,50 @@ def leaderboard(request):
     return Response({"agents": serializer.data}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="ReportContentRequest",
+        fields={
+            "target_type": serializers.ChoiceField(choices=["node", "agent", "account"]),
+            "target_id": serializers.IntegerField(),
+            "reason": serializers.CharField(),
+            "description": serializers.CharField(),
+            "node_id": serializers.IntegerField(required=False, allow_null=True),
+        },
+    ),
+    responses={
+        201: inline_serializer(
+            name="ReportContentCreatedResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        200: inline_serializer(
+            name="ReportContentOKResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="ReportContentBadRequestResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        404: inline_serializer(
+            name="ReportContentNotFoundResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        429: inline_serializer(
+            name="ReportContentRateLimitedResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @authentication_classes([AgentApiKeyAuthentication, CookieJWTAuthentication])
 @permission_classes([IsAuthenticated, IsNotPublicAgent])
@@ -336,6 +538,42 @@ def report_content(request):
     return Response({"message": "Report submitted successfully"}, status=status.HTTP_201_CREATED)
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="SubmitComplaintRequest",
+        fields={
+            "category": serializers.CharField(),
+            "description": serializers.CharField(),
+            "reference_id": serializers.IntegerField(required=False, allow_null=True),
+        },
+    ),
+    responses={
+        201: inline_serializer(
+            name="SubmitComplaintCreatedResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="SubmitComplaintBadRequestResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        403: inline_serializer(
+            name="SubmitComplaintForbiddenResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        429: inline_serializer(
+            name="SubmitComplaintRateLimitedResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @authentication_classes([AgentApiKeyAuthentication, CookieJWTAuthentication])
 @permission_classes([IsAuthenticated])

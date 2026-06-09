@@ -1,7 +1,7 @@
 module.exports = {
   enlidea: {
     input: {
-      target: 'http://localhost:8000/api/schema/',
+      target: './openapi.yml',
     },
     output: {
       mode: 'single',
@@ -11,7 +11,7 @@ module.exports = {
       override: {
         useTypeOverInterfaces: true,
         mutator: {
-          path: './src/api/mutator/custom-instance.js',
+          path: './src/api/mutator/custom-instance.ts',
           name: 'customInstance',
         },
       },

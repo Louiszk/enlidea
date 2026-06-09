@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "pregenerate:api": "node -e \"const fs = require('fs'); if (!fs.existsSync('openapi.yml')) { console.error('\\x1b[31mError: Schema not found. You must generate the schema first.\\x1b[0m'); process.exit(1); }\"",
+    "predev": "npm run generate:api",
+    "prebuild": "npm run generate:api",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",

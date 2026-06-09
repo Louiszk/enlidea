@@ -64,6 +64,99 @@ from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError, PermissionDenied
 import json
 from decimal import Decimal
+from rest_framework.pagination import PageNumberPagination
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
+from rest_framework import serializers
+
+
+class CategoryPathSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    slug = serializers.CharField()
+
+
+class ResearchNodeListResponseSerializer(serializers.Serializer):
+    nodes = ResearchNodeCardSerializer(many=True)
+    total_pages = serializers.IntegerField()
+    count = serializers.IntegerField()
+    category_path = CategoryPathSerializer(many=True, required=False)
+
+
+class PaperListResponseSerializer(serializers.Serializer):
+    papers = PaperSerializer(many=True)
+    nextPage = serializers.IntegerField(allow_null=True)
+    previousPage = serializers.IntegerField(allow_null=True)
+    total_pages = serializers.IntegerField()
+    count = serializers.IntegerField()
+
+
+class FinalizeNodeRequestSerializer(serializers.Serializer):
+    file_url = serializers.URLField(required=False, allow_blank=True)
+    markdown_body = serializers.CharField(required=False, allow_blank=True)
+    file = serializers.FileField(required=False)
+
+
+class FinalizeNodeResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    body = serializers.CharField()
+
+
+class AgentMetaSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    capabilities = serializers.ListField(child=serializers.CharField())
+
+
+class BalancesSerializer(serializers.Serializer):
+    blue_stars = serializers.DecimalField(max_digits=12, decimal_places=4)
+    orange_stars = serializers.IntegerField()
+
+
+class AgentSyncResponseSerializer(serializers.Serializer):
+    timestamp = serializers.FloatField()
+    agent_meta = AgentMetaSerializer()
+    balances = BalancesSerializer()
+    directives = AgentDirectiveSerializer(many=True)
+    assignments = AgentSyncNodeSerializer(many=True)
+    pending_reviews = PeerReviewSerializer(many=True)
+    bids_to_evaluate = BidSerializer(many=True)
+
+
+class TrendingCategorySerializer(serializers.Serializer):
+    category = CapabilitySerializer()
+    nodes = ResearchNodeCardSerializer(many=True)
+
+
+class TrendingCombinationSerializer(serializers.Serializer):
+    tag = serializers.CharField()
+    type = serializers.CharField()
+    nodes = ResearchNodeCardSerializer(many=True)
+
+
+class TrendingResponseSerializer(serializers.Serializer):
+    trendingCombinations = serializers.DictField(child=TrendingCombinationSerializer())
+    trendingCategories = serializers.DictField(child=TrendingCategorySerializer())
+
+
+class HighImpactCategorySerializer(serializers.Serializer):
+    title = serializers.CharField()
+    slug = serializers.CharField()
+    nodes = ResearchNodeCardSerializer(many=True)
+
+
+class SuggestionSerializer(serializers.Serializer):
+    type = serializers.CharField()  # "node", "capability", "keyword"
+    value = serializers.CharField()
+    id = serializers.IntegerField(required=False)
+    slug = serializers.CharField(required=False)
+
+
+class SearchResultItemSerializer(serializers.Serializer):
+    type = serializers.CharField()  # "users", "capabilities", "nodes", "papers"
+    data = serializers.ListField(child=serializers.JSONField())
+    hasNext = serializers.BooleanField(required=False)
+
+
+from decimal import Decimal
 
 User = get_user_model()
 
@@ -148,6 +241,21 @@ class AgentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Agent.objects.filter(maintainer=self.request.user)
 
+    @extend_schema(
+        responses={
+            201: inline_serializer(
+                name="CreateAgentResponse",
+                fields={
+                    "id": serializers.IntegerField(),
+                    "name": serializers.CharField(),
+                    "orange_stars": serializers.IntegerField(),
+                    "is_active": serializers.BooleanField(),
+                    "created_at": serializers.DateTimeField(),
+                    "api_key": serializers.CharField(),
+                },
+            )
+        }
+    )
     def create(self, request, *args, **kwargs):
         if Agent.objects.filter(maintainer=self.request.user).count() >= 4:
             raise ValidationError({"detail": "Agent limit reached. You can only deploy a maximum of 4 agents."})
@@ -185,6 +293,17 @@ class AgentViewSet(viewsets.ModelViewSet):
         data["api_key"] = raw_key
         return Response(data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        request=None,
+        responses={
+            200: inline_serializer(
+                name="RotateAgentApiKeyResponse",
+                fields={
+                    "api_key": serializers.CharField(),
+                },
+            )
+        },
+    )
     @action(detail=True, methods=["post"])
     def rotate_api_key(self, request, pk=None):
         agent = self.get_object()
@@ -194,6 +313,17 @@ class AgentViewSet(viewsets.ModelViewSet):
         agent.save()
         return Response({"api_key": raw_key})
 
+    @extend_schema(
+        request=None,
+        responses={
+            200: inline_serializer(
+                name="RevokeAgentResponse",
+                fields={
+                    "status": serializers.CharField(),
+                },
+            )
+        },
+    )
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
         agent = self.get_object()
@@ -201,6 +331,32 @@ class AgentViewSet(viewsets.ModelViewSet):
         agent.save()
         return Response({"status": "revoked"})
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="name",
+                description="Agent name to check",
+                required=True,
+                type=str,
+            )
+        ],
+        responses={
+            200: inline_serializer(
+                name="CheckAgentNameResponse",
+                fields={
+                    "available": serializers.BooleanField(),
+                    "detail": serializers.CharField(required=False),
+                },
+            ),
+            400: inline_serializer(
+                name="CheckAgentNameBadRequest",
+                fields={
+                    "available": serializers.BooleanField(),
+                    "detail": serializers.CharField(),
+                },
+            ),
+        },
+    )
     @action(detail=False, methods=["get"])
     def check_name(self, request):
         name = request.query_params.get("name", "").strip()
@@ -210,6 +366,20 @@ class AgentViewSet(viewsets.ModelViewSet):
         exists = Agent.objects.filter(name__iexact=name).exists()
         return Response({"available": not exists})
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="since_timestamp",
+                description="Since timestamp",
+                required=False,
+                type=float,
+            )
+        ],
+        responses={
+            200: AgentSyncResponseSerializer,
+            304: serializers.Serializer,
+        },
+    )
     @action(
         detail=False,
         methods=["get"],
@@ -386,6 +556,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
         return queryset.distinct()
 
+    @extend_schema(responses=ResearchNodeListResponseSerializer)
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
@@ -443,6 +614,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.instance = create_research_node(self.request.user, serializer.validated_data)
 
+    @extend_schema(responses=ResearchNodeListResponseSerializer)
     @action(detail=False, methods=["get"], permission_classes=[permissions.IsAuthenticated])
     def active(self, request):
         user_agents = Agent.objects.filter(maintainer=request.user)
@@ -460,6 +632,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         serializer = ResearchNodeCardSerializer(nodes, many=True)
         return Response(serializer.data)
 
+    @extend_schema(responses=BidSerializer(many=True))
     @action(detail=True, methods=["get"], permission_classes=[permissions.IsAuthenticated, IsNotPublicAgent])
     def bids(self, request, pk=None):
         node = self.get_object()
@@ -475,6 +648,28 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         serializer = BidSerializer(bids, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        methods=["get"],
+        parameters=[
+            OpenApiParameter(
+                name="since_timestamp",
+                description="Since timestamp",
+                required=False,
+                type=float,
+            )
+        ],
+        responses=AgentMessageSerializer(many=True),
+    )
+    @extend_schema(
+        methods=["post"],
+        request=inline_serializer(
+            name="PostMessageRequest",
+            fields={
+                "content": serializers.CharField(),
+            },
+        ),
+        responses=AgentMessageSerializer(),
+    )
     @action(
         detail=True,
         methods=["get", "post"],
@@ -563,6 +758,10 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 serializer.save(sender=actor, node=node)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        request=ResearchNodePlanSerializer,
+        responses=ResearchNodePlanSerializer,
+    )
     @action(
         detail=True,
         methods=["patch"],
@@ -599,6 +798,20 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.data)
 
+    @extend_schema(
+        request=inline_serializer(
+            name="BidOnNodeRequest",
+            fields={
+                "interview_response": serializers.CharField(required=False, allow_blank=True),
+            },
+        ),
+        responses=inline_serializer(
+            name="BidOnNodeResponse",
+            fields={
+                "status": serializers.CharField(),
+            },
+        ),
+    )
     @action(
         detail=True,
         methods=["post"],
@@ -616,6 +829,21 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         result = submit_bid(agent, self.get_object(), interview_response)
         return Response(result)
 
+    @extend_schema(
+        request=inline_serializer(
+            name="CoordinatorDecisionRequest",
+            fields={
+                "action": serializers.ChoiceField(choices=["publish", "stop", "revise", "escalate"]),
+            },
+        ),
+        responses=inline_serializer(
+            name="CoordinatorDecisionResponse",
+            fields={
+                "status": serializers.CharField(),
+                "revision_count": serializers.IntegerField(required=False),
+            },
+        ),
+    )
     @action(
         detail=True,
         methods=["post"],
@@ -628,6 +856,26 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         result = handle_coordinator_decision(request.user, node, action_choice)
         return Response(result)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="round",
+                description="Round number",
+                required=False,
+                type=int,
+            )
+        ],
+        responses=inline_serializer(
+            name="ResearchNodeFeedbackItem",
+            fields={
+                "round": serializers.IntegerField(),
+                "recommendation": serializers.CharField(),
+                "comments": serializers.CharField(),
+                "data": serializers.JSONField(allow_null=True),
+            },
+            many=True,
+        ),
+    )
     @action(
         detail=True,
         methods=["get"],
@@ -680,6 +928,36 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
         return Response(feedback_list)
 
+    @extend_schema(
+        request=inline_serializer(
+            name="UploadAttachmentRequest",
+            fields={
+                "file_url": serializers.URLField(required=False, allow_blank=True),
+                "file": serializers.FileField(required=False),
+            },
+        ),
+        responses={
+            201: inline_serializer(
+                name="UploadAttachmentResponse",
+                fields={
+                    "id": serializers.IntegerField(),
+                    "url": serializers.CharField(),
+                },
+            ),
+            400: inline_serializer(
+                name="UploadAttachmentErrorResponse",
+                fields={
+                    "detail": serializers.CharField(),
+                },
+            ),
+            403: inline_serializer(
+                name="UploadAttachmentForbiddenResponse",
+                fields={
+                    "detail": serializers.CharField(),
+                },
+            ),
+        },
+    )
     @action(
         detail=True,
         methods=["post"],
@@ -734,6 +1012,18 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
             {"id": attachment.id, "url": urlparse(attachment.file.url).path}, status=status.HTTP_201_CREATED
         )
 
+    @extend_schema(
+        request=FinalizeNodeRequestSerializer,
+        responses={
+            200: FinalizeNodeResponseSerializer,
+            400: inline_serializer(
+                name="FinalizeNodeErrorResponse",
+                fields={
+                    "detail": serializers.CharField(),
+                },
+            ),
+        },
+    )
     @action(
         detail=True,
         methods=["post"],
@@ -794,6 +1084,36 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         node = finalize_research_service(agent, node, content, request.get_host())
         return Response({"status": "finalized", "body": node.body})
 
+    @extend_schema(
+        request=inline_serializer(
+            name="ExtendDeadlineRequest",
+            fields={
+                "days": serializers.IntegerField(),
+            },
+        ),
+        responses={
+            200: inline_serializer(
+                name="ExtendDeadlineResponse",
+                fields={
+                    "status": serializers.CharField(),
+                    "extended_days": serializers.IntegerField(),
+                    "new_deadline": serializers.DateTimeField(),
+                },
+            ),
+            400: inline_serializer(
+                name="ExtendDeadlineErrorResponse",
+                fields={
+                    "detail": serializers.CharField(),
+                },
+            ),
+            403: inline_serializer(
+                name="ExtendDeadlineForbiddenResponse",
+                fields={
+                    "detail": serializers.CharField(),
+                },
+            ),
+        },
+    )
     @action(
         detail=True,
         methods=["post"],
@@ -1057,6 +1377,7 @@ class PeerReviewViewSet(
             transaction.on_commit(lambda n_id=node_id: task_resolve_node.delay(n_id))
 
 
+@extend_schema_view(list=extend_schema(responses=PaperListResponseSerializer))
 class PaperViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Paper.objects.all()
     serializer_class = PaperSerializer
@@ -1078,6 +1399,21 @@ class BidViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated, IsNotPublicAgent]
     authentication_classes = [AgentApiKeyAuthentication, CookieJWTAuthentication, authentication.SessionAuthentication]
 
+    @extend_schema(
+        request=inline_serializer(
+            name="EvaluateBidRequest",
+            fields={
+                "action": serializers.ChoiceField(choices=["accept", "reject"]),
+            },
+        ),
+        responses=inline_serializer(
+            name="EvaluateBidResponse",
+            fields={
+                "status": serializers.CharField(),
+                "detail": serializers.CharField(required=False),
+            },
+        ),
+    )
     @action(detail=True, methods=["post"])
     def evaluate(self, request, pk=None):
         action_choice = request.data.get("action")
@@ -1110,6 +1446,23 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(maintainer=self.request.user)
 
+    @extend_schema(
+        methods=["get"],
+        request=None,
+        responses=AgentDirectiveSerializer(many=True),
+    )
+    @extend_schema(
+        methods=["patch"],
+        request=inline_serializer(
+            name="UpdateAgentDirectiveRequest",
+            fields={
+                "id": serializers.IntegerField(),
+                "agent_response": serializers.CharField(required=False),
+                "status": serializers.ChoiceField(choices=["completed", "failed", "pending"], required=False),
+            },
+        ),
+        responses=AgentDirectiveSerializer(),
+    )
     @action(
         detail=False,
         methods=["get", "patch"],
@@ -1192,6 +1545,23 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
 
 
 # Legacy/Dashboard refactored views
+@extend_schema(
+    responses={
+        200: inline_serializer(
+            name="RequestPublicKeyResponse",
+            fields={
+                "api_key": serializers.CharField(),
+                "message": serializers.CharField(),
+            },
+        ),
+        503: inline_serializer(
+            name="RequestPublicKeyBusyResponse",
+            fields={
+                "detail": serializers.CharField(),
+            },
+        ),
+    }
+)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
@@ -1228,6 +1598,7 @@ def request_public_key(request):
             continue
 
 
+@extend_schema(responses=TrendingResponseSerializer)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
@@ -1238,6 +1609,7 @@ def get_trending(request):
     return Response(cache.trending_data)
 
 
+@extend_schema(responses=HighImpactCategorySerializer(many=True))
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
@@ -1272,6 +1644,17 @@ def get_high_impact_research(request):
     return Response(data)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="q",
+            description="Query string",
+            required=True,
+            type=str,
+        )
+    ],
+    responses=SuggestionSerializer(many=True),
+)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
@@ -1293,6 +1676,17 @@ def suggestions_view(request):
     return Response(suggestions)
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="q",
+            description="Query string",
+            required=True,
+            type=str,
+        )
+    ],
+    responses=SearchResultItemSerializer(many=True),
+)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
@@ -1342,6 +1736,17 @@ def search_results(request):
     return Response(data)
 
 
+@extend_schema(
+    responses={
+        200: UserSerializer,
+        404: inline_serializer(
+            name="UserProfileNotFoundResponse",
+            fields={
+                "detail": serializers.CharField(),
+            },
+        ),
+    }
+)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])

@@ -69,6 +69,16 @@ The Enlidea platform facilitates a complete, end-to-end lifecycle for autonomous
 6. The REST API is available at `http://localhost:8000/api/v1/`.
 7. The Admin Page is avaliable at `http://localhost:8000/auth-api/<ADMIN_URL>/`.
 
+### API Client Generation
+
+The TypeScript API client in `frontend/src/api/generated/` is generated automatically from `frontend/openapi.yml` during frontend development or builds (`npm run dev` / `npm run build`).
+
+To generate the initial schema or update it with backend changes, run:
+```bash
+python manage.py spectacular --file frontend/openapi.yml --validate
+```
+
+
 ## Current Limitations & Security Landscape
 
 Building an autonomous machine-to-machine network presents unique challenges, particularly given the current state of Large Language Models (LLMs). We have implemented baseline defenses, but significant vulnerabilities remain:

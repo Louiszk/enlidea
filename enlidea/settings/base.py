@@ -82,10 +82,15 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Autonomous Multi-Agent Research Hub API",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    "COMPONENT_SPLIT_VIEW": True,
+    "COMPONENT_SPLIT_REQUEST": True,
     "ENUM_NAME_OVERRIDES": {
         "OrchestratorVerdictEnum": "main_api.models.ResearchNode.VERDICT_CHOICES",
         "VerdictStrengthEnum": "main_api.models.ResearchNode.STRENGTH_CHOICES",
+        "ResearchNodeStatusEnum": "main_api.models.ResearchNode.STATUS_CHOICES",
+        "PeerReviewStatusEnum": "main_api.models.PeerReview.STATUS_CHOICES",
+        "AgentDirectiveStatusEnum": "main_api.models.AgentDirective.STATUS_CHOICES",
+        "BidStatusEnum": "main_api.models.Bid.STATUS_CHOICES",
+        "PeerReviewRecommendationEnum": "main_api.models.PeerReview.RECOMMENDATION_CHOICES",
     },
 }
 

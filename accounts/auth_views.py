@@ -23,6 +23,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.db import transaction, IntegrityError
 from .auth_helpers import check_login_attempts, increment_login_attempts, reset_login_attempts, get_remaining_attempts
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
+from rest_framework import serializers
 
 
 # VERIFICATION EMAIL
@@ -74,6 +76,32 @@ def set_password_reset_email_sent(user_id):
 # API FUNCTIONS
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="username",
+            description="Username to check",
+            required=True,
+            type=str,
+        )
+    ],
+    responses={
+        200: inline_serializer(
+            name="CheckUsernameResponse",
+            fields={
+                "is_valid": serializers.BooleanField(),
+                "is_taken": serializers.BooleanField(),
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="CheckUsernameBadRequestResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @throttle_classes([UsernameCheckThrottle])
@@ -99,6 +127,25 @@ def check_username(request):
     )
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="RegisterRequest",
+        fields={
+            "email": serializers.EmailField(),
+            "username": serializers.CharField(),
+            "password1": serializers.CharField(),
+            "password2": serializers.CharField(),
+        },
+    ),
+    responses={
+        201: inline_serializer(
+            name="RegisterResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
@@ -127,6 +174,22 @@ def register(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    responses={
+        200: inline_serializer(
+            name="ActivateAccountResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="ActivateAccountErrorResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    }
+)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -171,6 +234,42 @@ def activate_account(request, uidb64, token):
         return Response({"error": "Invalid activation link."}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="LoginRequest",
+        fields={
+            "email": serializers.EmailField(),
+            "password": serializers.CharField(),
+        },
+    ),
+    responses={
+        200: inline_serializer(
+            name="LoginResponse",
+            fields={
+                "message": serializers.CharField(),
+                "user": AccountSerializer(),
+            },
+        ),
+        400: inline_serializer(
+            name="LoginErrorResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        403: inline_serializer(
+            name="LoginForbiddenResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        429: inline_serializer(
+            name="LoginRateLimitResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
@@ -222,6 +321,29 @@ def login_view(request):
             )
 
 
+@extend_schema(
+    request=EmailSerializer,
+    responses={
+        200: inline_serializer(
+            name="ResendActivationResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        404: inline_serializer(
+            name="ResendActivationNotFoundResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        429: inline_serializer(
+            name="ResendActivationRateLimitResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def resend_activation(request):
@@ -251,6 +373,17 @@ def resend_activation(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    request=EmailSerializer,
+    responses={
+        200: inline_serializer(
+            name="PasswordResetResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def password_reset(request):
@@ -286,6 +419,23 @@ def password_reset(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="PasswordResetConfirmRequest",
+        fields={
+            "new_password1": serializers.CharField(),
+            "new_password2": serializers.CharField(),
+        },
+    ),
+    responses={
+        200: inline_serializer(
+            name="PasswordResetConfirmResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def password_reset_confirm(request, uidb64, token):
@@ -312,6 +462,17 @@ def password_reset_confirm(request, uidb64, token):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: inline_serializer(
+            name="LogoutResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        )
+    },
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -332,6 +493,18 @@ def logout_view(request):
     return response
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: AccountSerializer,
+        401: inline_serializer(
+            name="CurrentUserUnauthorizedResponse",
+            fields={
+                "detail": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["GET"])
 @authentication_classes([CookieJWTAuthentication])
 @permission_classes([AllowAny])
@@ -342,6 +515,29 @@ def current_user(request):
     return Response(serializer.data)
 
 
+@extend_schema(
+    request=None,
+    responses={
+        200: inline_serializer(
+            name="TokenRefreshResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="TokenRefreshErrorResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        401: inline_serializer(
+            name="TokenRefreshUnauthorizedResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])

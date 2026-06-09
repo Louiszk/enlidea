@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated API Client
+src/api/generated/
+openapi.yml
+
+

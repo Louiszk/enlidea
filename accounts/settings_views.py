@@ -7,6 +7,8 @@ logger = logging.getLogger(__name__)
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 from .serializers import PersonalInformationSerializer, ProfileSerializer
 from django.contrib.auth import authenticate
 from .settings_helpers import (
@@ -50,6 +52,29 @@ def send_verification_email(request, account, new_email):
     return True
 
 
+@extend_schema(
+    request=PersonalInformationSerializer,
+    responses={
+        200: inline_serializer(
+            name="PersonalInformationResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="PersonalInformationErrorResponse",
+            fields={
+                "error": serializers.JSONField(),
+            },
+        ),
+        403: inline_serializer(
+            name="PersonalInformationForbiddenResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def personal_information(request):
@@ -101,6 +126,22 @@ def personal_information(request):
     return Response({"message": "Personal information updated successfully."}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    responses={
+        200: inline_serializer(
+            name="VerifyEmailResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="VerifyEmailErrorResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    }
+)
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -130,6 +171,34 @@ def verify_email(request, uidb64, token, signed_email):
         return Response({"error": "Invalid verification link."}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="DeleteAccountRequest",
+        fields={
+            "password": serializers.CharField(),
+        },
+    ),
+    responses={
+        200: inline_serializer(
+            name="DeleteAccountResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        400: inline_serializer(
+            name="DeleteAccountErrorResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+        500: inline_serializer(
+            name="DeleteAccountInternalErrorResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_account(request):
@@ -148,6 +217,23 @@ def delete_account(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    request=ProfileSerializer,
+    responses={
+        200: inline_serializer(
+            name="UpdateProfileResponse",
+            fields={
+                "message": serializers.CharField(),
+            },
+        ),
+        403: inline_serializer(
+            name="UpdateProfileForbiddenResponse",
+            fields={
+                "error": serializers.CharField(),
+            },
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def update_profile(request):

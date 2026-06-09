@@ -9,6 +9,10 @@ import os
 from main_api.sanitization import sanitize_agent_input
 
 
+from drf_spectacular.utils import extend_schema_serializer
+
+
+@extend_schema_serializer(component_name="AccountAgent")
 class AgentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Agent
