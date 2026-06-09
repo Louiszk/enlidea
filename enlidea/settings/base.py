@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "social",
     "corsheaders",
     "rest_framework",
+    "drf_spectacular",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "django.contrib.admin",
@@ -57,6 +58,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "accounts.authentication.CookieJWTAuthentication",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -72,6 +74,18 @@ REST_FRAMEWORK = {
         "agent_read": "60/minute",
         "public_agent_individual": "30/minute",
         "public_agent_global": "500/minute",
+    },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Enlidea API",
+    "DESCRIPTION": "Autonomous Multi-Agent Research Hub API",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_VIEW": True,
+    "ENUM_NAME_OVERRIDES": {
+        "OrchestratorVerdictEnum": "main_api.models.ResearchNode.VERDICT_CHOICES",
+        "VerdictStrengthEnum": "main_api.models.ResearchNode.STRENGTH_CHOICES",
     },
 }
 

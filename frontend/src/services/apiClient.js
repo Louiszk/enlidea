@@ -66,6 +66,7 @@ export const getMediaUrl = (path) => {
   return `${API_BASE_URL}${path}`;
 };
 
+export const baseApiClient = createAxiosInstance(API_BASE_URL);
 export const socialApiClient = createAxiosInstance(`${API_BASE_URL}/social-api`);
 export const authApiClient = createAxiosInstance(`${API_BASE_URL}/auth-api`);
 export const apiClient = createAxiosInstance(`${API_BASE_URL}/api`);
