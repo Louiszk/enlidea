@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from django.utils.timezone import localtime
 from django.utils.text import slugify
 from .models import (
@@ -93,9 +94,18 @@ class UserSerializer(serializers.ModelSerializer):
             "active_agents",
         ]
 
+    @extend_schema_field(serializers.CharField())
     def get_joined_date(self, obj):
         return localtime(obj.date_joined).strftime("%B %Y")
 
+    @extend_schema_field(serializers.ListField(child=inline_serializer(
+        name="ActiveAgent",
+        fields={
+            "id": serializers.IntegerField(),
+            "name": serializers.CharField(),
+            "orange_stars": serializers.DecimalField(max_digits=12, decimal_places=4)
+        }
+    )))
     def get_active_agents(self, obj):
         agents = obj.agents.filter(is_active=True).order_by("-created_at")
         return [{"id": a.id, "name": a.name, "orange_stars": a.orange_stars} for a in agents]
@@ -119,6 +129,7 @@ class CapabilitySerializer(serializers.ModelSerializer):
             "has_children",
         ]
 
+    @extend_schema_field(serializers.BooleanField())
     def get_has_children(self, obj):
         return obj.child_capabilities.exists()
 
@@ -194,6 +205,7 @@ class AgentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"The name contains profane language: '{word}'")
         return value
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_online(self, obj):
         from django.core.cache import cache
 
@@ -316,6 +328,7 @@ class ResearchNodeCardSerializer(serializers.ModelSerializer):
             "type",
             "status",
             "bounty_amount",
+            "min_trust_required",
             "required_collaborators",
             "deadline",
             "coordinating_agent",
@@ -325,11 +338,17 @@ class ResearchNodeCardSerializer(serializers.ModelSerializer):
             "total_assigned",
         ]
 
+    @extend_schema_field(inline_serializer(
+        name="CardAgent",
+        fields={"name": serializers.CharField(), "id": serializers.IntegerField()},
+        allow_null=True
+    ))
     def get_coordinating_agent(self, obj):
         return (
             {"name": obj.coordinating_agent.name, "id": obj.coordinating_agent.id} if obj.coordinating_agent else None
         )
 
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_required_capabilities(self, obj):
         return [cap.slug for cap in obj.required_capabilities.all()]
 
@@ -362,6 +381,7 @@ class PaperSerializer(serializers.ModelSerializer):
             "saves",
         ]
 
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_user_vote(self, obj):
         request = self.context.get("request")
         if request and request.user.is_authenticated:
@@ -463,6 +483,7 @@ class ProfaneWordSerializer(serializers.ModelSerializer):
 class PeerReviewSerializer(serializers.ModelSerializer):
     assigned_reviewer_detail = AgentSerializer(source="assigned_reviewer", read_only=True)
     research_node_detail = ResearchNodeSerializer(source="research_node", read_only=True)
+    structured_data = serializers.DictField(allow_null=True, required=False)
 
     class Meta:
         model = PeerReview
@@ -767,11 +788,17 @@ class AgentSyncNodeSerializer(serializers.ModelSerializer):
             "coordination_plan",
         ]
 
+    @extend_schema_field(inline_serializer(
+        name="SyncNodeAgent",
+        fields={"name": serializers.CharField(), "id": serializers.IntegerField()},
+        allow_null=True
+    ))
     def get_coordinating_agent(self, obj):
         return (
             {"name": obj.coordinating_agent.name, "id": obj.coordinating_agent.id} if obj.coordinating_agent else None
         )
 
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_required_capabilities(self, obj):
         return [cap.slug for cap in obj.required_capabilities.all()]
 
@@ -825,6 +852,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
         fields = ["id", "node", "file", "url", "uploaded_by", "uploaded_by_name", "created_at"]
         read_only_fields = ["id", "node", "uploaded_by", "created_at", "file"]
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_url(self, obj):
         if not obj.file:
             return None

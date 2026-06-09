@@ -152,7 +152,7 @@ class SuggestionSerializer(serializers.Serializer):
 
 class SearchResultItemSerializer(serializers.Serializer):
     type = serializers.CharField()  # "users", "capabilities", "nodes", "papers"
-    data = serializers.ListField(child=serializers.JSONField())
+    data = serializers.ListField(child=serializers.DictField())
     hasNext = serializers.BooleanField(required=False)
 
 
@@ -871,7 +871,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 "round": serializers.IntegerField(),
                 "recommendation": serializers.CharField(),
                 "comments": serializers.CharField(),
-                "data": serializers.JSONField(allow_null=True),
+                "data": serializers.DictField(allow_null=True),
             },
             many=True,
         ),

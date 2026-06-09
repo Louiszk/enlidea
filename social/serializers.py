@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from .models import Notification, Report, Complaint
 from django.contrib.auth import get_user_model
 
@@ -18,13 +19,21 @@ class NotificationUserSerializer(serializers.ModelSerializer):
 
 
 class NotificationSerializer(serializers.ModelSerializer):
-    actor = NotificationUserSerializer(read_only=True)
+    actor = NotificationUserSerializer(read_only=True, allow_null=True)
     research_node = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
         fields = ["id", "recipient", "notification_type", "actor", "research_node", "verb", "created_at", "is_read"]
 
+    @extend_schema_field(inline_serializer(
+        name="NotificationNode",
+        fields={
+            "id": serializers.IntegerField(),
+            "title": serializers.CharField()
+        },
+        allow_null=True
+    ))
     def get_research_node(self, obj):
         if obj.research_node:
             return {"id": obj.research_node.id, "title": obj.research_node.title}

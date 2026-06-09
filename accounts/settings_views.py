@@ -64,7 +64,7 @@ def send_verification_email(request, account, new_email):
         400: inline_serializer(
             name="PersonalInformationErrorResponse",
             fields={
-                "error": serializers.JSONField(),
+                "error": serializers.DictField(child=serializers.ListField(child=serializers.CharField())),
             },
         ),
         403: inline_serializer(
