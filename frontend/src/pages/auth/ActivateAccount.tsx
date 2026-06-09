@@ -12,13 +12,14 @@ const ActivateAccount = () => {
     const activateAccount = async () => {
       try {
         setIsLoading(true);
-        const result = await authService.activateAccount(uidb64, token);
+        const result = await authService.activateAccount(uidb64!, token!);
         setActivationStatus(result.message);
         if (result.message === "Account activated successfully." || result.message.includes('already activated')) {
           setTimeout(() => navigate('/login'), 3000);
         }
       } catch (error) {
-        setActivationStatus(error.message || 'Account activation failed. Please try again or contact support.');
+        const err = error as any;
+        setActivationStatus(err.message || 'Account activation failed. Please try again or contact support.');
       } finally {
         setIsLoading(false);
       }

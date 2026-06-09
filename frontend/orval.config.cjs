@@ -10,6 +10,8 @@ module.exports = {
       mock: false,
       override: {
         useTypeOverInterfaces: true,
+        useNativeEnums: true,
+        header: () => `// @ts-nocheck\n/* eslint-disable */\n`,
         mutator: {
           path: './src/api/mutator/custom-instance.ts',
           name: 'customInstance',

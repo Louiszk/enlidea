@@ -3,8 +3,24 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { saveNode, savePaper } from '../services/socialService';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner, BookmarkIcon } from './Icons';
+import { Paper, ResearchNode } from '../api/generated/api';
 
-const SaveButton = ({ targetId, targetType = 'node', queryId, handleError }) => {
+export interface SaveButtonProps {
+  targetId: number;
+  targetType?: 'node' | 'paper';
+  queryId?: string | number;
+  handleError: () => void;
+}
+
+type SavableItem = (Paper | ResearchNode) & {
+  is_saved?: boolean;
+  coordinating_agent?: {
+    total_saves?: number;
+    [key: string]: any;
+  } | null;
+};
+
+const SaveButton: React.FC<SaveButtonProps> = ({ targetId, targetType = 'node', queryId, handleError }) => {
   const [isSaved, setIsSaved] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const { user, loading, refreshSaves, refreshPaperSaves } = useAuth();
@@ -14,7 +30,7 @@ const SaveButton = ({ targetId, targetType = 'node', queryId, handleError }) => 
   const queryKeyStr = isPaper ? 'paper' : 'node';
   const savedArrayName = isPaper ? 'saved_papers' : 'saved_nodes';
   const refreshFn = isPaper ? refreshPaperSaves : refreshSaves;
-  const cacheId = parseInt(queryId || targetId, 10);
+  const cacheId = parseInt(String(queryId || targetId), 10);
 
   const saveMutation = useMutation({
     mutationFn: () => isPaper ? savePaper(targetId) : saveNode(targetId),
@@ -22,10 +38,10 @@ const SaveButton = ({ targetId, targetType = 'node', queryId, handleError }) => 
       await queryClient.cancelQueries({ queryKey: [queryKeyStr, cacheId] });
       const previousData = queryClient.getQueryData([queryKeyStr, cacheId]);
       
-      queryClient.setQueryData([queryKeyStr, cacheId], old => {
+      queryClient.setQueryData<SavableItem>([queryKeyStr, cacheId], old => {
         if (!old) return old;
-        const newSaves = (old.saves || 0) + (isSaved ? -1 : 1);
-        const newData = {
+        const newSaves = ((old as any).saves || 0) + (isSaved ? -1 : 1);
+        const newData: SavableItem = {
           ...old,
           saves: newSaves,
           is_saved: !isSaved
@@ -34,7 +50,7 @@ const SaveButton = ({ targetId, targetType = 'node', queryId, handleError }) => 
         if (!isPaper && old.coordinating_agent) {
           newData.coordinating_agent = {
             ...old.coordinating_agent,
-            total_saves: (old.coordinating_agent.total_saves || 0) + (isSaved ? -1 : 1)
+            total_saves: ((old.coordinating_agent as any).total_saves || 0) + (isSaved ? -1 : 1)
           };
         }
         return newData;
@@ -43,7 +59,9 @@ const SaveButton = ({ targetId, targetType = 'node', queryId, handleError }) => 
       return { previousData };
     },
     onError: (error, variables, context) => {
-      queryClient.setQueryData([queryKeyStr, cacheId], context.previousData);
+      if (context) {
+        queryClient.setQueryData([queryKeyStr, cacheId], context.previousData);
+      }
     },
     onSuccess: () => {
       refreshFn(targetId);
@@ -58,9 +76,12 @@ const SaveButton = ({ targetId, targetType = 'node', queryId, handleError }) => 
   
 
   useEffect(() => {
-    if (!loading && user && user[savedArrayName]) {
-      const savedStatus = user[savedArrayName].includes(targetId);
-      setIsSaved(savedStatus);
+    if (!loading && user) {
+      const array = (user as any)[savedArrayName] as number[] | undefined;
+      if (array) {
+        const savedStatus = array.includes(targetId);
+        setIsSaved(savedStatus);
+      }
     }
   }, [targetId, loading, user, savedArrayName]);
 

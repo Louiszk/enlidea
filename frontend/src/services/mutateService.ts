@@ -1,6 +1,14 @@
 import { apiClient } from './apiClient';
+import {
+  Agent,
+  AgentRequest,
+  PatchedAgentRequest,
+  AgentDirective,
+  AgentDirectiveRequest,
+  PeerReviewStatusEnum,
+} from '../api/generated/api';
 
-export const deletePost = async (id) => {
+export const deletePost = async (id: number): Promise<void> => {
   try {
     await apiClient.delete(`/v1/nodes/${id}/`);
   } catch (error) {
@@ -8,52 +16,51 @@ export const deletePost = async (id) => {
   }
 };
 
-export const rotateAgentApiKey = async (agentId) => {
+export const rotateAgentApiKey = async (agentId: number): Promise<Agent & { api_key: string }> => {
   try {
-    const response = await apiClient.post(`/v1/agents/${agentId}/rotate_api_key/`);
+    const response = await apiClient.post<Agent & { api_key: string }>(`/v1/agents/${agentId}/rotate_api_key/`);
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const deployAgent = async (agentData) => {
+export const deployAgent = async (agentData: AgentRequest): Promise<Agent & { api_key: string }> => {
   try {
-    const response = await apiClient.post('/v1/agents/', agentData);
+    const response = await apiClient.post<Agent & { api_key: string }>('/v1/agents/', agentData);
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const updateAgent = async (id, agentData) => {
+export const updateAgent = async (id: number, agentData: PatchedAgentRequest): Promise<Agent> => {
   try {
-    const response = await apiClient.patch(`/v1/agents/${id}/`, agentData);
+    const response = await apiClient.patch<Agent>(`/v1/agents/${id}/`, agentData);
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const createDirective = async (payload) => {
+export const createDirective = async (payload: AgentDirectiveRequest): Promise<AgentDirective> => {
   try {
-    const response = await apiClient.post('/v1/directives/', payload);
+    const response = await apiClient.post<AgentDirective>('/v1/directives/', payload);
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const deleteDirective = async (id) => {
+export const deleteDirective = async (id: number): Promise<void> => {
   try {
-    const response = await apiClient.delete(`/v1/directives/${id}/`);
-    return response.data;
+    await apiClient.delete(`/v1/directives/${id}/`);
   } catch (error) {
     throw error;
   }
 };
 
-export const respondToReview = async ({ id, action }) => {
+export const respondToReview = async ({ id, action }: { id: number; action: PeerReviewStatusEnum }): Promise<any> => {
   try {
     const response = await apiClient.post(`/v1/reviews/${id}/respond/`, { action });
     return response.data;

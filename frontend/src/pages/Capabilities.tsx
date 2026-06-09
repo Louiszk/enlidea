@@ -6,7 +6,7 @@ import CapabilitySearch from '../components/CapabilitySearch';
 import { Spinner } from '../components/Icons';
 import Error from '../components/Error';
 
-const ArrowIcon = ({ isOpen, onClick }) => (
+const ArrowIcon = ({ isOpen, onClick }: { isOpen: boolean; onClick: () => void }) => (
   <svg
     className={`w-6 h-6 cursor-pointer transition-transform duration-300 ${isOpen ? 'transform rotate-180 text-indigo-400 hover:text-indigo-300' : 'text-zinc-400 hover:text-zinc-300'}`}
     onClick={onClick}
@@ -22,10 +22,10 @@ const ArrowIcon = ({ isOpen, onClick }) => (
   </svg>
 );
 
-const CategoryTree = ({ categories, level = 0 }) => {
-  const [openCategories, setOpenCategories] = useState({});
+const CategoryTree = ({ categories, level = 0 }: { categories: any[] | undefined; level?: number }) => {
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
-  const toggleCategory = (category) => {
+  const toggleCategory = (category: any) => {
     setOpenCategories(prev => ({
       ...prev,
       [category.slug]: !prev[category.slug]
@@ -34,7 +34,7 @@ const CategoryTree = ({ categories, level = 0 }) => {
 
   return (
     <ul className={`list-none ${level > 0 ? `ml-${level * 4} sm:ml-${level * 6} md:ml-${level * 8}` : ''}`}>
-      {categories.map((category) => (
+      {categories && categories.map((category) => (
         <li key={category.slug} className="my-4">
           <div className="flex items-center space-x-2">
             <Link
@@ -59,7 +59,7 @@ const CategoryTree = ({ categories, level = 0 }) => {
   );
 };
 
-const ChildCategories = ({ slug, level }) => {
+const ChildCategories = ({ slug, level }: { slug: string; level: number }) => {
   const { data: childCategories, isLoading, error } = useQuery({
     queryKey: ['categories', slug],
     queryFn: () => fetchCapabilities(slug),

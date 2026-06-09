@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import VirtualizedList from './VirtualizedList';
 
 // Mock window.innerWidth
-const setWidth = (width) => {
+const setWidth = (width: number) => {
   Object.defineProperty(window, 'innerWidth', {
     writable: true,
     configurable: true,
@@ -14,7 +14,7 @@ const setWidth = (width) => {
 
 describe('VirtualizedList', () => {
   const mockItems = Array.from({ length: 10 }, (_, i) => ({ id: i, name: `Item ${i}` }));
-  const mockRenderItem = (item, index) => (
+  const mockRenderItem = (item: any, index: number) => (
     <div key={item ? item.id : `empty-${index}`} data-testid="list-item" style={{ flex: 1 }}>
       {item ? item.name : 'Empty Slot'}
     </div>
@@ -58,7 +58,7 @@ describe('VirtualizedList', () => {
     // Should render the actual item
     expect(screen.getByText('Item 0')).toBeInTheDocument();
     const listItem = screen.getByTestId('list-item');
-    const row = listItem.parentElement;
+    const row = listItem.parentElement!;
     
     expect(row.children.length).toBe(3);
     // The first child is our item, the next two are the placeholder divs
@@ -83,7 +83,7 @@ describe('VirtualizedList', () => {
     );
 
     let listItem = screen.getAllByTestId('list-item')[0];
-    let row = listItem.parentElement;
+    let row = listItem.parentElement!;
     expect(row.children.length).toBe(1);
 
     // Mock tablet width
@@ -102,7 +102,7 @@ describe('VirtualizedList', () => {
       );
 
     listItem = screen.getAllByTestId('list-item')[0];
-    row = listItem.parentElement;
+    row = listItem.parentElement!;
     expect(row.children.length).toBe(2);
   });
 });

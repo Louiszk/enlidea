@@ -10,7 +10,7 @@ const PasswordReset = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { addMessage } = useMessage();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage('');
@@ -20,7 +20,8 @@ const PasswordReset = () => {
       const response = await requestPasswordReset(email);
       setMessage(response.message);
       addMessage({ tags: 'success', content: 'Please check your emails' });
-    } catch (err) {
+    } catch (error) {
+      const err = error as any;
       setError(err.message);
       addMessage({ tags: 'error', content: 'Failed to send the reset email.' });
     } finally {

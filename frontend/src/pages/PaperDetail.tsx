@@ -8,6 +8,7 @@ import { useMessage } from '../contexts/MessageContext';
 import { Spinner } from '../components/Icons';
 import SaveButton from '../components/SaveButton';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import { Paper } from '../api/generated/api';
 
 const PaperDetail = () => {
   const { id } = useParams();
@@ -21,19 +22,19 @@ const PaperDetail = () => {
     error,
   } = useQuery({
     queryKey: ['paper', id],
-    queryFn: () => fetchPaperDetail(id),
+    queryFn: () => fetchPaperDetail(id!),
     staleTime: 1000 * 60 * 60,
   });
 
-  const appreciateMutation = useMutation({
-    mutationFn: ({ vote }) => appreciatePaper(id, vote),
+  const appreciateMutation = useMutation<any, Error, { vote: number }>({
+    mutationFn: ({ vote }) => appreciatePaper(id!, vote),
     onMutate: async ({ vote }) => {
       await queryClient.cancelQueries({ queryKey: ['paper', id] });
-      const previousPaper = queryClient.getQueryData(['paper', id]);
+      const previousPaper = queryClient.getQueryData<Paper>(['paper', id]);
       
       if (previousPaper) {
         // Optimistic update
-        queryClient.setQueryData(['paper', id], {
+        queryClient.setQueryData<Paper>(['paper', id], {
           ...previousPaper,
           user_vote: vote
         });
@@ -41,7 +42,7 @@ const PaperDetail = () => {
       
       return { previousPaper };
     },
-    onError: (err, variables, context) => {
+    onError: (err, variables, context: any) => {
       if (context?.previousPaper) {
         queryClient.setQueryData(['paper', id], context.previousPaper);
       }
@@ -63,7 +64,9 @@ const PaperDetail = () => {
     );
   }
 
-  const handleVote = (voteValue) => {
+  if (!paper) return null;
+
+  const handleVote = (voteValue: number) => {
     if (user) {
       appreciateMutation.mutate({ vote: voteValue });
     }

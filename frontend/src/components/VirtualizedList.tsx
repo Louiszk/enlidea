@@ -1,19 +1,48 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-const VirtualizedList = ({ items, renderItem, itemHeight, loadMore, hasMore, rowReset, pageSize = 6, isDashboard = false, columns = { sm: 1, md: 2, lg: 3 } }) => {
+export interface VirtualizedListColumns {
+  sm?: number;
+  md?: number;
+  lg?: number;
+}
+
+export interface VirtualizedListProps<T> {
+  items: T[];
+  renderItem: (item: T | null, index: number) => React.ReactNode;
+  itemHeight: number;
+  loadMore: () => void;
+  hasMore: boolean;
+  rowReset?: number | string;
+  pageSize?: number;
+  isDashboard?: boolean;
+  columns?: number | VirtualizedListColumns;
+}
+
+const VirtualizedList = <T,>({
+  items,
+  renderItem,
+  itemHeight,
+  loadMore,
+  hasMore,
+  rowReset,
+  pageSize = 6,
+  isDashboard = false,
+  columns = { sm: 1, md: 2, lg: 3 }
+}: VirtualizedListProps<T>) => {
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
   
   const getColumnCount = useCallback(() => {
     if (isDashboard) return 1; // Always 1 column in dashboard
     if (typeof columns === 'number') return columns;
-    if (window.innerWidth >= 1024) return columns.lg || 3; // lg screens
-    if (window.innerWidth >= 768) return columns.md || 2; // md screens
-    return columns.sm || 1; // sm screens
+    const cols = columns as VirtualizedListColumns;
+    if (window.innerWidth >= 1024) return cols.lg || 3; // lg screens
+    if (window.innerWidth >= 768) return cols.md || 2; // md screens
+    return cols.sm || 1; // sm screens
   }, [isDashboard, columns]);
 
   const [columnCount, setColumnCount] = useState(getColumnCount());
-  const containerRef = useRef(null);
-  const lastLoadedRowRef = useRef(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastLoadedRowRef = useRef<number>(-1);
 
   const rowGap = itemHeight === 60 ? 0 : 8;
   const rowHeight = itemHeight + rowGap;
@@ -28,7 +57,7 @@ const VirtualizedList = ({ items, renderItem, itemHeight, loadMore, hasMore, row
     setColumnCount(getColumnCount());
   }, [getColumnCount]);
 
-  const loadMoreItems = useCallback((rowIndex) => {
+  const loadMoreItems = useCallback((rowIndex: number) => {
     if (rowIndex >= lastLoadedRowRef.current + rows && hasMore) {
       lastLoadedRowRef.current = rowIndex;
       loadMore();
@@ -74,7 +103,7 @@ const VirtualizedList = ({ items, renderItem, itemHeight, loadMore, hasMore, row
     };
   }, [updateVisibleRange, updateColumnCount]);
 
-  const renderRow = (rowIndex) => {
+  const renderRow = (rowIndex: number) => {
     const startIndex = rowIndex * columnCount;
     const isShimmerRow = rowIndex === Math.ceil(items.length / columnCount) && hasMore;
 

@@ -9,7 +9,19 @@ import PaperCard from '../components/PaperCard';
 import { ShimmerCard } from '../components/ShimmerSection';
 import Error from '../components/Error';
 
-const NoResults = ({ query }) => {
+import {
+  Account,
+  Capability,
+  ResearchNodeCard,
+  Paper,
+  SearchResultItem,
+} from '../api/generated/api';
+
+interface NoResultsProps {
+  query: string | null;
+}
+
+const NoResults: React.FC<NoResultsProps> = ({ query }) => {
     return (
       <div className="py-12 bg-slate-900 flex items-center justify-center px-4 sm:px-6 lg:px-8">
         <div className="max-w-lg w-full space-y-8 bg-slate-800 p-10 rounded-xl shadow-2xl border border-slate-700">
@@ -44,10 +56,11 @@ const SearchResults = () => {
     isError
   } = useInfiniteQuery({
     queryKey: ['searchResults', query],
-    queryFn: ({ pageParam = 1 }) => fetchSearchResults(query, pageParam),
-    getNextPageParam: (lastPage) => {
+    queryFn: ({ pageParam = 1 }) => fetchSearchResults(query, pageParam as number),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: SearchResultItem[], allPages) => {
       const nodesResult = lastPage.find(result => result.type === 'nodes');
-      return nodesResult && nodesResult.hasNext ? nodesResult.nextPage : undefined;
+      return nodesResult && nodesResult.hasNext ? allPages.length + 1 : undefined;
     },
     enabled: !!query && query.length >= 3,
     staleTime: 1000 * 60 * 5,
@@ -55,12 +68,12 @@ const SearchResults = () => {
   });
 
   const allResults = data ? data.pages.flatMap(page => page) : [];
-  const users = allResults.find(result => result.type === 'users')?.data || [];
-  const capabilities = allResults.find(result => result.type === 'capabilities')?.data || [];
-  const nodes = allResults.flatMap(result => (result.type === 'nodes') ? result.data : []);
-  const papers = allResults.find(result => result.type === 'papers')?.data || [];
+  const users = (allResults.find(result => result.type === 'users')?.data || []) as Account[];
+  const capabilities = (allResults.find(result => result.type === 'capabilities')?.data || []) as Capability[];
+  const nodes = (allResults.flatMap(result => (result.type === 'nodes') ? result.data : []) || []) as ResearchNodeCard[];
+  const papers = (allResults.find(result => result.type === 'papers')?.data || []) as Paper[];
 
-  const getIcon = (type) => {
+  const getIcon = (type: string) => {
     switch (type) {
       case 'user':
         return <UserIcon />;
@@ -73,7 +86,7 @@ const SearchResults = () => {
     }
   };
 
-  const renderItem = useCallback((node, index) => {
+  const renderItem = useCallback((node: ResearchNodeCard | null, index: number) => {
     return node ? (
     <div style={{ flex: 1, margin: '0 8px' }}>
         <NodeCard key={node.id} node={node} />
@@ -85,13 +98,18 @@ const SearchResults = () => {
     );
   }, []);
 
-  const renderCard = useCallback((item, index) => {
+  const renderCard = useCallback((item: Account | Capability, index: number) => {
+    const slug = 'slug' in item ? item.slug : undefined;
+    const id = 'id' in item ? item.id : undefined;
+    const username = 'username' in item ? item.username : undefined;
+    const title = 'title' in item ? item.title : undefined;
+
     return (
-    <Link to={item.slug ? `/capabilities/${item.slug}` : `/user/${item.id}`} key={item.id || index} className="bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700 p-4 rounded-xl shadow flex items-center gap-3 group">
+    <Link to={slug ? `/capabilities/${slug}` : `/user/${id}`} key={id || index} className="bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700 p-4 rounded-xl shadow flex items-center gap-3 group">
         <div className="text-indigo-400 group-hover:scale-110 transition-transform">
-          {getIcon(item.type)}
+          {getIcon(slug ? 'capability' : 'user')}
         </div>
-        <span className="font-bold text-slate-200 truncate">{item.title || item.username}</span>
+        <span className="font-bold text-slate-200 truncate">{title || username}</span>
     </Link>
     );
   }, []);
@@ -141,7 +159,7 @@ const SearchResults = () => {
             <CapabilityIcon className="text-green-400" /> Capabilities
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {capabilities.map((capability) => renderCard({ ...capability, type: 'capability' }))}
+            {capabilities.map((capability, index) => renderCard(capability, index))}
           </div>
         </div>
       )}
@@ -152,7 +170,7 @@ const SearchResults = () => {
             <UserIcon className="text-indigo-400" /> Maintainers
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {users.map((user) => renderCard({ ...user, type: 'user' }))}
+            {users.map((user, index) => renderCard(user, index))}
           </div>
         </div>
       )}

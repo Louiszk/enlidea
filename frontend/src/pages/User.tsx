@@ -13,6 +13,7 @@ import ViewFullRating from '../components/ViewFullRating';
 import Modal from '../components/Modal';
 import { ReportButton, ReportForm } from '../components/Report';
 import { getMediaUrl } from '../services/apiClient';
+import { User as ApiUser } from '../api/generated/api';
 
 const User = () => {
   const { userId } = useParams();
@@ -22,20 +23,23 @@ const User = () => {
   const queryClient = useQueryClient();
 
   const { data: user, isLoading, error } = useQuery({
-    queryKey: ['profile', parseInt(userId, 10)],
-    queryFn: () => fetchUserProfile(userId),
+    queryKey: ['profile', parseInt(userId!, 10)],
+    queryFn: () => fetchUserProfile(userId!),
     staleTime: 60 * 1000 * 2,
     gcTime: 60 * 1000 * 60 * 2,
   });
 
-  const followMutation = useMutation({
-    mutationFn: (isFollowing) => isFollowing ? unfollowUser(userId) : followUser(userId),
+  const followMutation = useMutation<any, Error, boolean>({
+    mutationFn: (isFollowing: boolean) => isFollowing ? unfollowUser(userId!) : followUser(userId!),
     onSuccess: (_, isFollowing) => {
-      queryClient.setQueryData(['profile', parseInt(userId, 10)], (oldData) => ({
-        ...oldData,
-        follower_count: oldData.follower_count + (isFollowing ? -1 : 1),
-      }));
-      refreshFollows(parseInt(userId, 10), !isFollowing);
+      queryClient.setQueryData<ApiUser>(['profile', parseInt(userId!, 10)], (oldData) => {
+        if (!oldData) return undefined;
+        return {
+          ...oldData,
+          follower_count: oldData.follower_count + (isFollowing ? -1 : 1),
+        };
+      });
+      refreshFollows(parseInt(userId!, 10), !isFollowing);
     },
     onError: () => {
       addMessage({ tags: 'error', content: "Something went wrong, please try again later or contact our support." });
@@ -53,7 +57,7 @@ const User = () => {
     },
   });
 
-  const isFollowing = authUser && user ? authUser.follows.includes(parseInt(userId, 10)) : false;
+  const isFollowing = authUser && user ? authUser.follows.includes(parseInt(userId!, 10)) : false;
 
   const handleFollowAction = () => {
     if (!authUser) {
@@ -63,11 +67,11 @@ const User = () => {
     }
   };
 
-  const handleReportSubmit = (reportData) => {
+  const handleReportSubmit = (reportData: any) => {
     reportMutation.mutate(reportData);
   };
 
-  const conditionalS = (count, name) => {
+  const conditionalS = (count: number, name: string) => {
     return count !== 1 ? `${name}s` : name;
   };
 
@@ -195,7 +199,7 @@ const User = () => {
         <div className="max-w-6xl px-4 py-8">
           <h2 className="text-2xl font-bold text-gray-300 mb-6">Active Agents</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {user.active_agents.map((agent) => (
+            {user.active_agents.map((agent: any) => (
               <div key={agent.id} className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex flex-col justify-between h-full">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-lg text-white">@{agent.name}</span>

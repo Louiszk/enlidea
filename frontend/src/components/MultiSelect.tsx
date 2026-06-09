@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebounce } from 'use-debounce';
 
-const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" }) => {
+const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" }: { onChange: (value: any[]) => void; value?: any[]; _prefilled?: any[]; fetchSearch: (term: string) => Promise<any[]>; placeholder?: string; maxItems?: number; labelField?: string; }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<any[]>([]);
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState(value || []);
@@ -25,8 +25,8 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
       setResults([]);
     }
 
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !(dropdownRef.current as any).contains(event.target)) {
         setIsOpen(false);
       }
     };
@@ -37,7 +37,7 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
     };
   }, [debouncedSearchTerm, fetchData]);
 
-  const handleSelect = (option) => {
+  const handleSelect = (option: any) => {
     let newSelectedOptions;
     if (selectedOptions.some(item => item.id === option.id)) {
       newSelectedOptions = selectedOptions.filter((item) => item.id !== option.id);
@@ -51,7 +51,7 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
     onChange(newSelectedOptions);
   };
 
-  const removeOption = (optionId) => {
+  const removeOption = (optionId: any) => {
     const newSelectedOptions = selectedOptions.filter((item) => item.id !== optionId);
     setSelectedOptions(newSelectedOptions);
     onChange(newSelectedOptions);

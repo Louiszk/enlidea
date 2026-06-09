@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 
-const ComplaintForm = ({ onSubmit }) => {
+const ComplaintForm = ({ onSubmit }: { onSubmit: (data: any) => void }) => {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [referenceId, setReferenceId] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({ 
       category, 

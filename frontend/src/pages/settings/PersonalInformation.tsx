@@ -28,11 +28,11 @@ const PersonalInformation = () => {
     }
   }, [user]);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -47,9 +47,12 @@ const PersonalInformation = () => {
         formData.currentPassword
       );
       setSuccess(result.message || 'Personal information updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+      }
       setTimeout(refreshUser, 4000);
-    } catch (err) {
+    } catch (error) {
+      const err = error as any;
       setError(err.message || 'An error occurred while updating personal information');
       addMessage({
         tags: 'error',

@@ -12,6 +12,7 @@ import VirtualizedList from '../components/VirtualizedList';
 import { Spinner } from '../components/Icons';
 import Error from '../components/Error';
 import { getMediaUrl } from '../services/apiClient';
+import { HomeFeedResponse, PaperListResponse, ResearchNodeCard, Paper } from '../api/generated/api';
 
 
 const HomeFeed = () => {
@@ -21,7 +22,7 @@ const HomeFeed = () => {
   const navigate = useNavigate();
 
   const {
-    data: followsData,
+    data: followsData = [],
     isLoading: isFollowsLoading,
     error: followsError
   } = useQuery({
@@ -41,8 +42,9 @@ const HomeFeed = () => {
     error: nodesError
   } = useInfiniteQuery({
     queryKey: ['homeFeed', selectedUser],
-    queryFn: ({ pageParam = 1 }) => getHomeFeed(selectedUser, pageParam),
-    getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
+    queryFn: ({ pageParam = 1 }) => getHomeFeed(String(selectedUser), pageParam as number),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: HomeFeedResponse) => lastPage.nextPage ?? undefined,
     enabled: !!user && feedType === 'bounties'
   });
 
@@ -55,12 +57,13 @@ const HomeFeed = () => {
     error: papersError
   } = useInfiniteQuery({
     queryKey: ['papersFeed'],
-    queryFn: ({ pageParam = 1 }) => fetchPapers(pageParam),
-    getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
+    queryFn: ({ pageParam = 1 }) => fetchPapers(pageParam as number),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: PaperListResponse) => lastPage.nextPage ?? undefined,
     enabled: !!user && feedType === 'papers'
   });
 
-  const handleUserClick = (userId) => {
+  const handleUserClick = (userId: number) => {
     if (selectedUser === userId && userId !== 0) {
       navigate(`/user/${userId}`);
     } else {
@@ -70,9 +73,9 @@ const HomeFeed = () => {
 
   const items = feedType === 'bounties' 
     ? (nodeData?.pages.flatMap(page => page.nodes) || [])
-    : (paperData?.pages.flatMap(page => page.results || page.nodes) || []);
+    : (paperData?.pages.flatMap(page => page.papers || []) || []);
 
-  const renderItem = useCallback((item, index) => {
+  const renderItem = useCallback((item: ResearchNodeCard | Paper | null, index: number) => {
     if (!item) {
         return (
             <div style={{ flex: 1, margin: '0 8px' }}>
@@ -83,11 +86,11 @@ const HomeFeed = () => {
 
     return feedType === 'bounties' ? (
       <div style={{ flex: 1, margin: '0 8px' }}>
-        <NodeCard key={`node-${item.id}`} node={item} />
+        <NodeCard key={`node-${item.id}`} node={item as ResearchNodeCard} />
       </div>
     ) : (
       <div style={{ flex: 1, margin: '0 8px' }}>
-        <PaperCard key={`paper-${item.id}`} paper={item} />
+        <PaperCard key={`paper-${item.id}`} paper={item as Paper} />
       </div>
     );
   }, [feedType]);

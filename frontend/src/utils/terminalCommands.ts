@@ -1,4 +1,20 @@
-export const LOCAL_COMMANDS = {
+import { AgentDirective } from '../api/generated/api';
+
+export interface TerminalCommandContext {
+  appendOutput: (text: string, type: 'system' | 'info' | 'error' | 'success') => void;
+  setTerminalOutput: (value: any) => void;
+  appendDirective: (dir: AgentDirective) => void;
+  directives: AgentDirective[];
+  deleteDirectiveMutation: { mutate: (id: number) => void };
+}
+
+export interface TerminalCommand {
+  description: string;
+  usage?: string;
+  execute: (args: string[], context: TerminalCommandContext) => void;
+}
+
+export const LOCAL_COMMANDS: Record<string, TerminalCommand> = {
   '/help': {
     description: 'Show this message',
     execute: (args, { appendOutput }) => {
@@ -44,10 +60,10 @@ export const LOCAL_COMMANDS = {
     usage: '<id>',
     execute: (args, { appendOutput, directives, deleteDirectiveMutation }) => {
       const dirId = args[0];
-      if (!dirId || isNaN(dirId)) {
+      if (!dirId || isNaN(Number(dirId))) {
         appendOutput(`[ERROR] Usage: /remove <id>`, 'error');
       } else {
-        const dir = directives.find(d => d.id === parseInt(dirId));
+        const dir = directives.find(d => d.id === parseInt(dirId, 10));
         if (!dir) {
           appendOutput(`[ERROR] Directive #${dirId} not found.`, 'error');
         } else if (dir.status !== 'pending') {
@@ -60,7 +76,7 @@ export const LOCAL_COMMANDS = {
   }
 };
 
-export const executeCommand = (cmdStr, context) => {
+export const executeCommand = (cmdStr: string, context: TerminalCommandContext) => {
   const [command, ...args] = cmdStr.trim().split(/\s+/);
   const normalizedCommand = command.toLowerCase();
 

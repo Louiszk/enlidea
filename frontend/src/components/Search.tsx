@@ -22,12 +22,12 @@ const Search = () => {
     gcTime: 1000 * 60 * 60
   });
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
     setShowSuggestions(true);
   };
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleSearch();
     }
@@ -40,7 +40,7 @@ const Search = () => {
     }
   };
 
-  const handleSuggestionClick = (suggestion) => {
+  const handleSuggestionClick = (suggestion: any) => {
     if (suggestion.type == 'user'){
       navigate(`/user/${suggestion.id}`);
     } else if (suggestion.type == 'node') {
@@ -53,8 +53,8 @@ const Search = () => {
     setShowSuggestions(false);
   };
 
-  const handleClickOutside = (e) => {
-    if (inputRef.current && !inputRef.current.contains(e.target)) {
+  const handleClickOutside = (e: MouseEvent) => {
+    if (inputRef.current && !(inputRef.current as any).contains(e.target)) {
       setShowSuggestions(false);
     }
   };
@@ -66,7 +66,7 @@ const Search = () => {
     };
   }, []);
 
-  const getIcon = (type) => {
+  const getIcon = (type: string) => {
     switch (type) {
       case 'user':
         return <UserIcon/>;
@@ -107,7 +107,7 @@ const Search = () => {
               <SearchIcon />
               <span>Search for {query} ...</span>
             </div>}
-              {suggestions.map((suggestion, index) => (
+              {suggestions.map((suggestion: any, index: number) => (
               <div
                 key={index}
                 className="px-4 py-2 hover:bg-gray-600 cursor-pointer text-white flex items-center gap-2"

@@ -2,19 +2,25 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ShimmerCard } from './ShimmerSection';
+import { ResearchNodeCard, ResearchNodeStatusEnum } from '../api/generated/api';
 
-const NodeCard = React.memo(({ node }) => {
+export interface NodeCardProps {
+  node: ResearchNodeCard;
+}
+
+const NodeCard: React.FC<NodeCardProps> = React.memo(({ node }) => {
   const { loading } = useAuth();
 
   if (loading) {
-    return <ShimmerCard />
+    return <ShimmerCard />;
   }
 
   const coordinatingAgent = node.coordinating_agent;
   const capabilities = node.required_capabilities || [];
   const keywords = node.keywords || [];
+  const minTrust = Number(node.min_trust_required || 0);
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status?: ResearchNodeStatusEnum) => {
     switch (status) {
       case 'open':
         return <span className="px-2 py-0.5 bg-green-900/50 text-green-300 text-[10px] font-bold rounded border border-green-500/30 uppercase">Open</span>;
@@ -33,11 +39,13 @@ const NodeCard = React.memo(({ node }) => {
     }
   };
 
+  const isWarningStatus = node.status && (node.status === 'rejected' || node.status === 'failed');
+
   return (
     <Link
       key={node.id}
       to={`/node/${node.id}`}
-      className={`block w-full max-w-md mx-auto select-none flex flex-col bg-gray-800 rounded-xl border ${['rejected', 'failed'].includes(node.status) ? 'border-red-500/50' : 'border-indigo-500/50'} shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1`}
+      className={`block w-full max-w-md mx-auto select-none flex flex-col bg-gray-800 rounded-xl border ${isWarningStatus ? 'border-red-500/50' : 'border-indigo-500/50'} shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1`}
     >
       <div className="p-4 w-full relative">
         <div className="absolute left-2 top-2">
@@ -86,15 +94,15 @@ const NodeCard = React.memo(({ node }) => {
           <div className='flex justify-between items-center p-2 bg-black/20 rounded-lg'>
             <div className="flex flex-col">
               <span className="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">Bounty</span>
-              <span className="text-indigo-400 font-black text-lg leading-tight">{Math.floor(node.bounty_amount)} {'\u2727'}</span>
+              <span className="text-indigo-400 font-black text-lg leading-tight">{Math.floor(Number(node.bounty_amount || 0))} {'\u2727'}</span>
             </div>
 
             <div className="flex items-center space-x-4">
-              {node.min_trust_required > 0 && (
+              {minTrust > 0 && (
                 <div className="flex flex-col items-center">
                    <span className="text-[10px] text-gray-500 uppercase font-bold">Req. Trust</span>
                    <div className="flex items-center space-x-1">
-                    <span className="text-orange-400 font-bold">{Number(node?.min_trust_required || 0).toFixed(1)}</span>
+                    <span className="text-orange-400 font-bold">{Number(minTrust).toFixed(1)}</span>
                     <span className="text-orange-400 text-xs">★</span>
                    </div>
                 </div>

@@ -11,11 +11,11 @@ const ProfileSettings = () => {
   const queryClient = useQueryClient();
   const { user, loading, refreshUser } = useAuth();
   const { addMessage } = useMessage();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{avatar: File | null; biography: string}>({
     avatar: null,
     biography: '',
   });
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
@@ -30,17 +30,19 @@ const ProfileSettings = () => {
     }
   }, [user]);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.target.name === 'avatar') {
-      const file = e.target.files[0];
-      setFormData({ ...formData, avatar: file });
-      setPreviewUrl(URL.createObjectURL(file));
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        setFormData({ ...formData, avatar: file });
+        setPreviewUrl(URL.createObjectURL(file));
+      }
     } else {
       setFormData({ ...formData, [e.target.name]: e.target.value });
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -69,9 +71,12 @@ const ProfileSettings = () => {
             content: 'Profile updated successfully. Redirecting...'
         });
         refreshUser();
-        queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
-        setTimeout(() => navigate(`/user/${user.id}`), 4000);
-    } catch (err) {
+        if (user?.id) {
+          queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+          setTimeout(() => navigate(`/user/${user.id}`), 4000);
+        }
+    } catch (error) {
+        const err = error as any;
         setError(err.message || 'An error occurred while updating profile information');
         addMessage({
             tags: 'error',
@@ -89,7 +94,7 @@ const ProfileSettings = () => {
   return (
     <div className="max-w-2xl mx-auto p-6 bg-gray-800 rounded-lg shadow-md w-full flex flex-col gap-4">
       <h2 className="text-2xl font-semibold mb-2 text-white">Profile Settings</h2>
-      <h3 className='text-xl font-semibold text-gray-200'> @{user.username} </h3>
+      <h3 className='text-xl font-semibold text-gray-200'> @{user?.username} </h3>
       {error && <div className="mb-4 p-3 bg-red-900 text-red-300 font-semibold rounded">{error}</div>}
       {success && <div className="mb-4 p-3 bg-green-900 text-green-300 font-semibold rounded">{success}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -122,7 +127,7 @@ const ProfileSettings = () => {
             name="biography"
             value={formData.biography}
             onChange={handleChange}
-            rows="4"
+            rows={4}
             maxLength={2000}
             className="form-fields"
           ></textarea>

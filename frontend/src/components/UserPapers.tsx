@@ -7,11 +7,12 @@ import VirtualizedList from '../components/VirtualizedList';
 import { ShimmerCard } from '../components/ShimmerSection';
 import { Spinner } from './Icons';
 import Error from '../components/Error';
+import { Paper, PaperListResponse } from '../api/generated/api';
 
-const NoPapers = () => {
+const NoPapers: React.FC = () => {
   return (
     <div className="py-12 bg-gradient-to-r from-zinc-800 via-purple-900 to-zinc-800 flex items-center rounded-md justify-center mx-4 sm:mx-6 lg:mx-8">
-      <div className="max-w-lg w-full space-y-8 bg-zinc-100 p-10 rounded-xl shadow-2xl border border-purple-500/20">
+      <div className="max-w-lg w-full space-y-8 bg-zinc-100 p-10 rounded-xl shadow-2xl">
         <div>
           <p className="mt-2 text-center text-3xl font-bold text-gray-900">
             No papers found
@@ -25,7 +26,7 @@ const NoPapers = () => {
   );
 };
 
-const UserPapers = () => {
+const UserPapers: React.FC = () => {
   const { loading: authLoading } = useAuth();
 
   const {
@@ -37,16 +38,17 @@ const UserPapers = () => {
     error
   } = useInfiniteQuery({
     queryKey: ['userSavedPapers'],
-    queryFn: ({ pageParam = 1 }) => fetchPapers(pageParam, null, true),
-    getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
-    getPreviousPageParam: (firstPage) => firstPage.previousPage ?? undefined,
+    queryFn: ({ pageParam = 1 }) => fetchPapers(pageParam as number, null, true),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: PaperListResponse) => lastPage.nextPage ?? undefined,
+    getPreviousPageParam: (firstPage: PaperListResponse) => firstPage.previousPage ?? undefined,
     staleTime: 60 * 1000 * 2,
     gcTime: 60 * 1000 * 60 * 2,
   });
 
-  const papers = data?.pages.flatMap(page => page.results || page.papers || []) || [];
+  const papers = data?.pages.flatMap(page => page.papers || []) || [];
 
-  const renderItem = useCallback((paper, index) => {
+  const renderItem = useCallback((paper: Paper | null, index: number) => {
     return paper ? (
       <div style={{ flex: 1, margin: '0 8px' }}>
         <PaperCard key={paper.id} paper={paper} />

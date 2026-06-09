@@ -8,8 +8,19 @@ import { ShimmerCard } from '../components/ShimmerSection';
 import { Spinner } from './Icons';
 import SortSearch from '../components/SortSearch';
 import Error from '../components/Error';
+import { ResearchNodeCard, ResearchNodeListResponse } from '../api/generated/api';
 
-const NoNodes = ({ isOwnProfile, isSaved }) => {
+export interface UserNodesProps {
+  private: boolean;
+  userId?: number;
+}
+
+interface NoNodesProps {
+  isOwnProfile: boolean | null | undefined;
+  isSaved: boolean;
+}
+
+const NoNodes: React.FC<NoNodesProps> = ({ isOwnProfile, isSaved }) => {
   return (
     <div className="py-12 bg-gradient-to-r from-zinc-800 via-green-900 to-zinc-800 flex items-center rounded-md justify-center mx-4 sm:mx-6 lg:mx-8">
       <div className="max-w-lg w-full space-y-8 bg-zinc-100 p-10 rounded-xl shadow-2xl">
@@ -28,7 +39,7 @@ const NoNodes = ({ isOwnProfile, isSaved }) => {
   );
 };
 
-const UserNodes = ({ private: isSaved, userId }) => {
+const UserNodes: React.FC<UserNodesProps> = ({ private: isSaved, userId }) => {
   const { user, loading: authLoading } = useAuth();
   const [sortBy, setSortBy] = useState('created_desc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,26 +56,33 @@ const UserNodes = ({ private: isSaved, userId }) => {
     error
   } = useInfiniteQuery({
     queryKey: ['userNodes', userId, isSaved, sortBy, searchTerm],
-    queryFn: ({ pageParam = 1 }) => fetchSavedNodes(isSaved ? user.id : userId, isSaved, pageParam, sortBy, searchTerm),
-    getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
-    getPreviousPageParam: (firstPage) => firstPage.previousPage ?? undefined,
+    queryFn: ({ pageParam = 1 }) => fetchSavedNodes(isSaved ? user?.id : userId, isSaved, pageParam as number, sortBy, searchTerm),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: ResearchNodeListResponse, allPages) => {
+      const nextPage = allPages.length + 1;
+      return nextPage <= (lastPage.total_pages || 1) ? nextPage : undefined;
+    },
+    getPreviousPageParam: (firstPage: ResearchNodeListResponse, allPages) => {
+      const prevPage = allPages.length - 1;
+      return prevPage >= 1 ? prevPage : undefined;
+    },
     staleTime: 60 * 1000 * 2,
     gcTime: 60 * 1000 * 60 * 2,
   });
 
   const nodes = data?.pages.flatMap(page => page.nodes) || [];
 
-  const handleSortChange = useCallback((value) => {
+  const handleSortChange = useCallback((value: string) => {
     setSortBy(value);
     setResetKey(prevKey => prevKey + 1);
   }, []);
 
-  const handleSearchChange = useCallback((value) => {
+  const handleSearchChange = useCallback((value: string) => {
     setSearchTerm(value);
     setResetKey(prevKey => prevKey + 1);
   }, []);
 
-  const renderItem = useCallback((node, index) => {
+  const renderItem = useCallback((node: ResearchNodeCard | null, index: number) => {
     return node ? (
       <div style={{ flex: 1, margin: '0 8px' }}>
         <NodeCard key={node.id} node={node} />

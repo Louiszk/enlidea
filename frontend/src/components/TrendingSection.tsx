@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom';
 import NodeCard from './NodeCard'
 import PaperCard from './PaperCard';
 
+interface TrendingSectionProps {
+  title: string;
+  data: any;
+  highImpact?: string;
+  isPapers?: boolean;
+}
+
 const ChevronLeftIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-white">
     <path fillRule="evenodd" d="M7.72 12.53a.75.75 0 010-1.06l7.5-7.5a.75.75 0 111.06 1.06L9.31 12l6.97 6.97a.75.75 0 11-1.06 1.06l-7.5-7.5z" clipRule="evenodd" />
@@ -15,12 +22,12 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
-const TrendingSection = ({ title, data, highImpact, isPapers = false }) => {
+const TrendingSection: React.FC<TrendingSectionProps> = ({ title, data, highImpact, isPapers = false }) => {
     const [showArrows, setShowArrows] = useState(false);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(true);
     const [isScrollable, setIsScrollable] = useState(false);
-    const scrollContainerRef = useRef(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -65,7 +72,7 @@ const TrendingSection = ({ title, data, highImpact, isPapers = false }) => {
         }
       }, []);
   
-    const scroll = (direction) => {
+    const scroll = (direction: 'left' | 'right') => {
       const container = scrollContainerRef.current;
       if (container) {
         const smallScreen = window.innerWidth <= 640;
@@ -113,7 +120,7 @@ const TrendingSection = ({ title, data, highImpact, isPapers = false }) => {
             className="flex overflow-x-auto space-x-4 scrollbar-hide"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            {items.map((item) => (
+            {items.map((item: any) => (
               <div key={`${item.id}_${title}`} className="min-w-64 max-w-64 sm:min-w-80 sm:max-w-80 flex-shrink-0">
                 {isPapers ? <PaperCard paper={item} /> : <NodeCard node={item} />}
               </div>

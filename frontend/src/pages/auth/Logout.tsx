@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { SadFace, Spinner } from '../../components/Icons';
 
 const Logout = () => {
-  const { logout, logoutLoading, logoutError } = useAuth();
+  const { logout, isLogoutLoading, logoutError } = useAuth();
   const { addMessage } = useMessage();
 
   useEffect(() => {
@@ -20,7 +20,7 @@ const Logout = () => {
     performLogout();
   }, [logout, addMessage]);
 
-  if (logoutLoading) return <Spinner />
+  if (isLogoutLoading) return <Spinner />
   if (logoutError) return <div className='bg-gray-800 h-96 flex items-center justify-center'><SadFace /></div>
 
   return (

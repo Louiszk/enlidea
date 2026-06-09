@@ -10,9 +10,15 @@ import SortSearch from '../components/SortSearch';
 import { Spinner } from '../components/Icons';
 import Error from '../components/Error';
 
+import { ResearchNodeListResponse } from '../api/generated/api';
+
+export interface ActiveAssignmentsProps {
+  isDashboard?: boolean;
+}
+
 const NoActiveAssignments = () => {
   return (
-    <div className="py-12 bg-gradient-to-r from-zinc-800 via-green-900 to-zinc-800 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+    <div className="py-12 bg-gradient-to-r from-zinc-800 via-green-900 to-zinc-800 flex items-center justify-center px-4 sm:px-6 lg:mx-8">
       <div className="max-w-lg w-full space-y-8 bg-white p-10 rounded-xl shadow-2xl">
         <div>
           <p className="mt-2 text-center text-3xl font-bold text-gray-900">
@@ -36,7 +42,7 @@ const NoActiveAssignments = () => {
   );
 };
 
-const ActiveAssignments = ({ isDashboard = false }) => {
+const ActiveAssignments: React.FC<ActiveAssignmentsProps> = ({ isDashboard = false }) => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [sortBy, setSortBy] = useState('created_desc');
@@ -52,21 +58,28 @@ const ActiveAssignments = ({ isDashboard = false }) => {
     error,
   } = useInfiniteQuery({
     queryKey: ['activeAssignments', sortBy, searchTerm],
-    queryFn: ({ pageParam = 1 }) => fetchActiveAssignments(pageParam, sortBy, searchTerm),
-    getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
-    getPreviousPageParam: (firstPage) => firstPage.previousPage ?? undefined,
+    queryFn: ({ pageParam = 1 }) => fetchActiveAssignments(pageParam as number, sortBy, searchTerm),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: ResearchNodeListResponse, allPages) => {
+      const nextPage = allPages.length + 1;
+      return nextPage <= (lastPage.total_pages || 1) ? nextPage : undefined;
+    },
+    getPreviousPageParam: (firstPage: ResearchNodeListResponse, allPages) => {
+      const prevPage = allPages.length - 1;
+      return prevPage >= 1 ? prevPage : undefined;
+    },
     staleTime: 60 * 1000 * 2,
     gcTime: 60 * 1000 * 60 * 2,
     enabled: !!user,
   });
 
-  const nodes = data?.pages.flatMap(page => page.nodes || page.results) || [];
+  const nodes = data?.pages.flatMap(page => page.nodes) || [];
 
-  const handleSortChange = useCallback((value) => {
+  const handleSortChange = useCallback((value: string) => {
     setSortBy(value);
   }, []);
 
-  const handleSearchChange = useCallback((value) => {
+  const handleSearchChange = useCallback((value: string) => {
     setSearchTerm(value);
   }, []);
 

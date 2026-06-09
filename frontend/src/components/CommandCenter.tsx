@@ -4,8 +4,19 @@ import { fetchAgents, fetchDirectives } from '../services/fetchService';
 import { createDirective, deleteDirective } from '../services/mutateService';
 import { Spinner } from './Icons';
 import ReviewOffers from './ReviewOffers';
+import { AgentDirective } from '../api/generated/api';
 
 import { executeCommand } from '../utils/terminalCommands';
+
+export interface TerminalOutputItem {
+  id: string | number;
+  text?: string;
+  type?: string;
+  isLocal?: boolean;
+  isDirectiveRef?: boolean;
+  dirId?: number;
+  dirSnapshot?: AgentDirective;
+}
 
 const CommandCenter = () => {
   const queryClient = useQueryClient();
@@ -15,13 +26,13 @@ const CommandCenter = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   
   // Master terminal log. This stores EVERYTHING in order.
-  const [terminalOutput, setTerminalOutput] = useState([
+  const [terminalOutput, setTerminalOutput] = useState<TerminalOutputItem[]>([
     { id: 'init-1', text: 'Console initialized. All services operational.', type: 'system', isLocal: true },
     { id: 'init-3', text: 'Welcome. Type /help for available commands.', type: 'info', isLocal: true },
   ]);
   
-  const inputRef = useRef(null);
-  const scrollRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: agents = [], isLoading: agentsLoading } = useQuery({
     queryKey: ['agents'],
@@ -43,7 +54,7 @@ const CommandCenter = () => {
       appendDirective(newDir);
     },
     onError: (error) => {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to issue directive';
+      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to issue directive';
       appendOutput(`[ERROR] ${errorMessage}`, 'error');
     }
   });
@@ -55,7 +66,7 @@ const CommandCenter = () => {
       appendOutput(`[SYSTEM] Directive #${id} removed successfully.`, 'success');
     },
     onError: (error) => {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to remove directive';
+      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to remove directive';
       appendOutput(`[ERROR] ${errorMessage}`, 'error');
     }
   });
@@ -77,19 +88,19 @@ const CommandCenter = () => {
     }
   }, [filteredAgents.length, selectedIndex]);
 
-  const appendOutput = (text, type = 'info') => {
+  const appendOutput = (text: string, type: string = 'info') => {
     setTerminalOutput(prev => [...prev, { id: Date.now() + Math.random(), text, type, isLocal: true }]);
   };
 
-  const appendDirective = (dir) => {
+  const appendDirective = (dir: AgentDirective) => {
     setTerminalOutput(prev => [...prev, { id: `dir-ref-${Date.now()}-${dir.id}`, dirId: dir.id, dirSnapshot: dir, isDirectiveRef: true }]);
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputText(value);
 
-    const cursorPosition = e.target.selectionStart;
+    const cursorPosition = e.target.selectionStart || 0;
     const textBeforeCursor = value.slice(0, cursorPosition);
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
 
@@ -102,17 +113,17 @@ const CommandCenter = () => {
     }
   };
 
-  const handleAgentSelect = (agentName) => {
-    const cursorPosition = inputRef.current.selectionStart;
+  const handleAgentSelect = (agentName: string) => {
+    const cursorPosition = inputRef.current?.selectionStart || 0;
     const textBeforeCursor = inputText.slice(0, cursorPosition);
     const textAfterCursor = inputText.slice(cursorPosition);
     const newTextBeforeCursor = textBeforeCursor.replace(/@\w*$/, `@${agentName} `);
     setInputText(newTextBeforeCursor + textAfterCursor);
     setShowSuggestions(false);
-    inputRef.current.focus();
+    inputRef.current?.focus();
   };
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (showSuggestions && filteredAgents.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -129,7 +140,7 @@ const CommandCenter = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || createDirectiveMutation.isPending) return;
 
@@ -150,7 +161,7 @@ const CommandCenter = () => {
 
     appendOutput(`> ${content}`, 'user');
 
-    let agentId = null;
+    let agentId: number | undefined = undefined;
     const mentionRegex = /@(\w+)\b/;
     const match = content.match(mentionRegex);
 
@@ -168,7 +179,7 @@ const CommandCenter = () => {
     });
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-400';
       case 'in_progress': return 'text-blue-400';

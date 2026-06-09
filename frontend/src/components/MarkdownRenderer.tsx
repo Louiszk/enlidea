@@ -5,8 +5,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { API_BASE_URL } from '../services/apiClient';
 
-const MarkdownRenderer = ({ content }) => {
-  const urlTransform = (uri) => {
+const MarkdownRenderer = ({ content }: { content: string }) => {
+  const urlTransform = (uri: string) => {
     // If it's an internal Docker URL or points to our API base, convert it to a relative path
     // e.g., http://backend:8000/media/... -> /media/...
     try {

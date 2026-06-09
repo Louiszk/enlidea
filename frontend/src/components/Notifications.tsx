@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getNotifications, markNotificationsAsRead } from '../services/socialService';
 import { FulfillmentIcon, SavedIcon, VisitsIcon, FollowerIcon, RatedIcon, CustomIcon } from './Icons';
+import { Notification, NotificationTypeEnum } from '../api/generated/api';
 
-const getGroupKey = (notification) => {
-  switch (notification.notification_type) {
+export interface GroupedNotification extends Notification {
+  count: number;
+}
+
+const getGroupKey = (notification: Notification): string => {
+  switch (notification.notification_type as string) {
     case 'new_follower':
       return 'new_follower';
     case 'node_saved':
@@ -11,11 +16,11 @@ const getGroupKey = (notification) => {
     case 'peer_review_received':
       return `${notification.notification_type}_${notification.research_node?.id}`;
     default:
-      return notification.id;
+      return String(notification.id);
   }
 };
 
-const getGroupedVerb = (type, count) => {
+const getGroupedVerb = (type: NotificationTypeEnum, count: number): string => {
   switch (type) {
     case 'new_follower':
       return count === 1 ? 'started following you' : `${count} users started following you`;
@@ -32,8 +37,8 @@ const getGroupedVerb = (type, count) => {
   }
 };
 
-const groupNotifications = (notifications) => {
-  const grouped = {};
+const groupNotifications = (notifications: Notification[]): GroupedNotification[] => {
+  const grouped: Record<string, Notification[]> = {};
   notifications.forEach(notification => {
     const key = getGroupKey(notification);
     if (!grouped[key]) {
@@ -51,15 +56,15 @@ const groupNotifications = (notifications) => {
   });
 };
 
-const Notifications = () => {
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
+const Notifications: React.FC = () => {
+  const [notifications, setNotifications] = useState<GroupedNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const data = await getNotifications();
+      const data: Notification[] = await getNotifications();
       const groupedNotifications = groupNotifications(data);
       setNotifications(groupedNotifications);
       setUnreadCount(groupedNotifications.filter(n => !n.is_read).length);
@@ -70,8 +75,8 @@ const Notifications = () => {
 
   useEffect(() => {
     fetchNotifications();
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -93,7 +98,7 @@ const Notifications = () => {
     }
   };
 
-  const getNotificationIcon = (type) => {
+  const getNotificationIcon = (type: NotificationTypeEnum) => {
     switch (type) {
       case 'new_follower':
         return <FollowerIcon />;

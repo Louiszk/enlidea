@@ -10,15 +10,15 @@ const Header = () => {
   const { user, loading } = useAuth();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const menuRef = useRef(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMobileMenuOpen(false);
       }
     };
@@ -29,7 +29,7 @@ const Header = () => {
     };
   }, []);
 
-  const handleLinkClick = (_event) => {
+  const handleLinkClick = (_event: React.MouseEvent) => {
     setIsMobileMenuOpen(false);
   };
 

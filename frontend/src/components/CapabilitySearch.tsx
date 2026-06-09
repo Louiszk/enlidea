@@ -26,8 +26,8 @@ const CapabilitySearch = () => {
       setIsOpen(false);
     }
 
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !(dropdownRef.current as any).contains(event.target)) {
         setIsOpen(false);
       }
     };

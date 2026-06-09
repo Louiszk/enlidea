@@ -1,8 +1,23 @@
 import { socialApiClient as apiClient } from './apiClient';
+import {
+  AppreciatePaperResponse,
+  SaveNodeResponse,
+  SavePaperResponse,
+  FollowUserResponse,
+  UnfollowUserResponse,
+  HomeFeedResponse,
+  Follow,
+  Notification,
+  LeaderboardResponse,
+  ReportContentRequestRequest,
+  ReportContentCreatedResponse,
+  SubmitComplaintRequestRequest,
+  SubmitComplaintCreatedResponse,
+} from '../api/generated/api';
 
-export const appreciatePaper = async (paperId, vote) => {
+export const appreciatePaper = async (paperId: number | string, vote: number): Promise<AppreciatePaperResponse> => {
   try {
-    const response = await apiClient.post(`/papers/${paperId}/appreciate/`, { vote });
+    const response = await apiClient.post<AppreciatePaperResponse>(`/papers/${paperId}/appreciate/`, { vote });
     return response.data;
   } catch (error) {
     console.error('Error appreciating paper:', error);
@@ -10,27 +25,27 @@ export const appreciatePaper = async (paperId, vote) => {
   }
 };
 
-export const saveNode = async (nodeId) => {
+export const saveNode = async (nodeId: number | string): Promise<SaveNodeResponse> => {
   try {
-    const response = await apiClient.post(`/nodes/${nodeId}/save/`);
+    const response = await apiClient.post<SaveNodeResponse>(`/nodes/${nodeId}/save/`);
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const savePaper = async (paperId) => {
+export const savePaper = async (paperId: number | string): Promise<SavePaperResponse> => {
   try {
-    const response = await apiClient.post(`/papers/${paperId}/save/`);
+    const response = await apiClient.post<SavePaperResponse>(`/papers/${paperId}/save/`);
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-export const followUser = async (userId) => {
+export const followUser = async (userId: number | string): Promise<FollowUserResponse> => {
   try {
-    const response = await apiClient.post(`/follow/${userId}/`);
+    const response = await apiClient.post<FollowUserResponse>(`/follow/${userId}/`);
     return response.data;
   } catch (error) {
     console.error('Error following user:', error);
@@ -38,9 +53,9 @@ export const followUser = async (userId) => {
   }
 };
 
-export const unfollowUser = async (userId) => {
+export const unfollowUser = async (userId: number | string): Promise<UnfollowUserResponse> => {
   try {
-    const response = await apiClient.post(`/unfollow/${userId}/`);
+    const response = await apiClient.post<UnfollowUserResponse>(`/unfollow/${userId}/`);
     return response.data;
   } catch (error) {
     console.error('Error unfollowing user:', error);
@@ -48,9 +63,9 @@ export const unfollowUser = async (userId) => {
   }
 };
 
-export const getHomeFeed = async (userId = '0', page = 1) => {
+export const getHomeFeed = async (userId: string = '0', page: number = 1): Promise<HomeFeedResponse> => {
   try {
-    const response = await apiClient.get(`/home-feed/${userId}`, { params: { page } });
+    const response = await apiClient.get<HomeFeedResponse>(`/home-feed/${userId}`, { params: { page } });
     return response.data;
   } catch (error) {
     console.error('Error fetching home feed:', error);
@@ -58,9 +73,9 @@ export const getHomeFeed = async (userId = '0', page = 1) => {
   }
 };
 
-export const getFollows = async () => {
+export const getFollows = async (): Promise<Follow[]> => {
   try {
-    const response = await apiClient.get('/follows/');
+    const response = await apiClient.get<Follow[]>('/follows/');
     return response.data;
   } catch (error) {
     console.error('Error fetching follows:', error);
@@ -68,9 +83,9 @@ export const getFollows = async () => {
   }
 };
 
-export const getNotifications = async () => {
+export const getNotifications = async (): Promise<Notification[]> => {
   try {
-    const response = await apiClient.get('/notifications/');
+    const response = await apiClient.get<Notification[]>('/notifications/');
     return response.data;
   } catch (error) {
     console.error('Error fetching notifications:', error);
@@ -78,7 +93,7 @@ export const getNotifications = async () => {
   }
 };
 
-export const markNotificationsAsRead = async () => {
+export const markNotificationsAsRead = async (): Promise<void> => {
   try {
     await apiClient.post('/notifications/mark-read/');
   } catch (error) {
@@ -87,9 +102,9 @@ export const markNotificationsAsRead = async () => {
   }
 };
 
-export const fetchLeaderboard = async (page = 1) => {
+export const fetchLeaderboard = async (page: number = 1): Promise<LeaderboardResponse> => {
   try {
-    const response = await apiClient.get('/leaderboard', { params: { page } });
+    const response = await apiClient.get<LeaderboardResponse>('/leaderboard', { params: { page } });
     return response.data;
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
@@ -97,9 +112,9 @@ export const fetchLeaderboard = async (page = 1) => {
   }
 };
 
-export const submitReport = async (reportData) => {
+export const submitReport = async (reportData: ReportContentRequestRequest): Promise<ReportContentCreatedResponse> => {
   try {
-    const response = await apiClient.post('/report/', reportData);
+    const response = await apiClient.post<ReportContentCreatedResponse>('/report/', reportData);
     return response.data;
   } catch (error) {
     console.error('Error submitting report:', error);
@@ -107,9 +122,9 @@ export const submitReport = async (reportData) => {
   }
 };
 
-export const submitComplaint = async (complaintData) => {
+export const submitComplaint = async (complaintData: SubmitComplaintRequestRequest): Promise<SubmitComplaintCreatedResponse> => {
   try {
-    const response = await apiClient.post('/complaint/', complaintData);
+    const response = await apiClient.post<SubmitComplaintCreatedResponse>('/complaint/', complaintData);
     return response.data;
   } catch (error) {
     console.error('Error submitting complaint:', error);

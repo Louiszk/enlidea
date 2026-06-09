@@ -11,12 +11,12 @@ import SortFilter from '../components/SortFilter';
 import { plural } from '../services/constants';
 import { Spinner } from '../components/Icons';
 
-const NoNodes = ( {path} ) => {
+const NoNodes = ( {path}: {path: {slug: string; title: string}[]} ) => {
     return (
       <div className="py-12 flex items-center justify-center px-4 sm:px-6 lg:px-8">
         <div className="max-w-lg w-full space-y-8 bg-gradient-to-r from-zinc-100 to-zinc-200 p-10 rounded-xl shadow-2xl">
         <div className='font-semibold text-zinc-800'>
-            {path.map((cat, index) => (
+            {path.map((cat: {slug: string; title: string}, index: number) => (
               <span key={cat.slug}>
                 <Link className="hover:underline" to={`/categories/${cat.slug}`}>{cat.title}</Link>
                 {index < path.length - 1 && " > "}
@@ -60,7 +60,7 @@ const NoNodes = ( {path} ) => {
   
     const { data, error, isLoading } = useQuery({
       queryKey: ['capabilityNodes', slug, page, sortBy, filters],
-      queryFn: () => fetchCapabilityNodes(slug, page, sortBy, filters),
+      queryFn: () => fetchCapabilityNodes(slug!, page, sortBy, filters),
       staleTime: 60 * 1000 * 2,
       gcTime: 60 * 1000 * 60 * 2,
     });
@@ -69,7 +69,7 @@ const NoNodes = ( {path} ) => {
     const path = data?.category_path || [];
     const totalPages = data?.total_pages || 0;
   
-    const handlePageChange = (pageNumber) => {
+    const handlePageChange = (pageNumber: number) => {
       if (slug) {
         navigate(`/categories/${slug}?sort=${sortBy}&filters=${filters}&page=${pageNumber}`);
       } else {
@@ -77,10 +77,11 @@ const NoNodes = ( {path} ) => {
       }
     };
   
-    if (error) {
-      if (error.detail && error.detail.includes('No Category matches')) {
+    const apiError = error as { detail?: string; message?: string; category_path?: any[] } | null;
+    if (apiError) {
+      if (apiError.detail && apiError.detail.includes('No Category matches')) {
         return <NotFound />;
-      } else if (!error.message || !error.message.includes('No nodes found')) {
+      } else if (!apiError.message || !apiError.message.includes('No nodes found')) {
         return <NotFound />;
       }
     }
@@ -111,8 +112,8 @@ const NoNodes = ( {path} ) => {
         />
         {isLoading ? (
           <Spinner />
-        ) : error && error.message && error.message.includes('No nodes found') ? (
-          <NoNodes path={error.category_path} />
+        ) : apiError && apiError.message && apiError.message.includes('No nodes found') ? (
+          <NoNodes path={apiError.category_path || []} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {nodes.map(node => (

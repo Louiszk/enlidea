@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Pagination = ({ currentPage, totalPages, onPageChange, loading }) => {
+const Pagination = ({ currentPage, totalPages, onPageChange, loading }: { currentPage: number; totalPages: number; onPageChange: (page: number) => void; loading?: boolean; }) => {
   const getPageNumbers = () => {
     let pages = [];
     if (totalPages <= 3) {

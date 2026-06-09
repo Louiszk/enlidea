@@ -21,7 +21,7 @@ const PasswordResetConfirm = () => {
     }
   }, [uid, token]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage('');
@@ -34,10 +34,11 @@ const PasswordResetConfirm = () => {
     }
 
     try {
-      const response = await confirmPasswordReset(uid, token, newPassword1, newPassword2);
+      const response = await confirmPasswordReset(uid!, token!, newPassword1, newPassword2);
       setMessage(response.message);
       setTimeout(() => navigate('/login'), 3000);
-    } catch (err) {
+    } catch (error) {
+      const err = error as any;
       setError(err.message);
       if (err.message === 'Invalid reset link.') {
         setIsValidLink(false);

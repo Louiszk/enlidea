@@ -9,6 +9,8 @@ import { StarIcon } from '../components/Icons';
 import VirtualizedList from '../components/VirtualizedList';
 import Shimmerboard from '../components/Shimmerboard';
 
+import { Agent, LeaderboardResponse } from '../api/generated/api';
+
 const Leaderboard = () => {
   const { loading: authLoading } = useAuth();
   const { message, removeMessage } = useMessage();
@@ -22,15 +24,18 @@ const Leaderboard = () => {
     error
   } = useInfiniteQuery({
     queryKey: ['leaderboard'],
-    queryFn: ({ pageParam = 1 }) => fetchLeaderboard(pageParam),
-    getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
+    queryFn: ({ pageParam = 1 }) => fetchLeaderboard(pageParam as number),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: LeaderboardResponse, allPages) => {
+      return lastPage.agents.length === 10 ? allPages.length + 1 : undefined;
+    },
     staleTime: 600000,
     gcTime: 1200000,
   });
 
   const agents = data?.pages.flatMap(page => page.agents) || [];
 
-  const renderItem = useCallback((agent, index) => {
+  const renderItem = useCallback((agent: Agent | null, index: number) => {
     if (!agent) {
       return (
         <div className="flex justify-center items-center h-14 w-full">

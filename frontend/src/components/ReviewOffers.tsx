@@ -46,8 +46,8 @@ const ReviewOffers = () => {
                 {review.research_node_detail?.title}
               </div>
               <div className="text-zinc-500 text-xs flex gap-3 mt-1">
-                <span>Bounty: {Math.floor(review.research_node_detail?.bounty_amount || 0)} ✧</span>
-                <span>Type: {review.research_node_detail?.type?.name || review.research_node_detail?.type}</span>
+                <span>Bounty: {Math.floor(Number(review.research_node_detail?.bounty_amount || 0))} ✧</span>
+                <span>Type: {review.research_node_detail?.type}</span>
               </div>
             </div>
           </div>

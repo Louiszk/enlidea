@@ -2,11 +2,17 @@ import React, { useState, useCallback } from 'react';
 import { useDebounce } from 'use-debounce';
 import { SearchIcon } from './Icons';
 
-const SortSearch = ({ onSortChange, onSearchChange, noAdded }) => {
+export interface SortSearchProps {
+  onSortChange: (value: string) => void;
+  onSearchChange: (value: string) => void;
+  noAdded?: boolean;
+}
+
+const SortSearch: React.FC<SortSearchProps> = ({ onSortChange, onSearchChange, noAdded }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
 
-  const handleSearchChange = useCallback((value) => {
+  const handleSearchChange = useCallback((value: string) => {
     setSearchTerm(value);
   }, []);
 

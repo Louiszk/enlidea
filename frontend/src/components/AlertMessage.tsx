@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from 'react';
 
-const MessageAlert = ({ message, onClose }) => {
-  const [show, setShow] = useState(true);
+export interface AlertMessage {
+  tags?: 'success' | 'error' | 'warning' | 'info';
+  content: string;
+}
+
+export interface AlertMessageProps {
+  message: AlertMessage | null | undefined;
+  onClose: () => void;
+}
+
+const MessageAlert: React.FC<AlertMessageProps> = ({ message, onClose }) => {
+  const [show, setShow] = useState<boolean>(true);
 
   useEffect(() => {
     if (!show) {
-      setTimeout(() => onClose(), 400);
+      const timer = setTimeout(() => onClose(), 400);
+      return () => clearTimeout(timer);
     }
   }, [show, onClose]);
 
-
-  const getIcon = () => {
+  const getIcon = (): React.ReactNode => {
+    if (!message) return null;
     switch (message.tags) {
       case 'success':
         return (
@@ -41,7 +52,7 @@ const MessageAlert = ({ message, onClose }) => {
 
   if (!message) return null;
 
-  const getBgColor = () => {
+  const getBgColor = (): string => {
     switch (message.tags) {
       case 'success':
         return 'bg-green-50';
@@ -54,7 +65,7 @@ const MessageAlert = ({ message, onClose }) => {
     }
   };
 
-  const getTextColor = () => {
+  const getTextColor = (): string => {
     switch (message.tags) {
       case 'success':
         return 'text-green-900';
@@ -85,7 +96,7 @@ const MessageAlert = ({ message, onClose }) => {
           <div className="ml-4 flex-shrink-0 flex">
             <button
               onClick={() => setShow(false)}
-              className={`bg-transparent cursor-pointer rounded-md inline-flex focus:outline-none focus:ring-2 focus:ring-offset-2`}
+              className="bg-transparent cursor-pointer rounded-md inline-flex focus:outline-none focus:ring-2 focus:ring-offset-2"
             >
               <span className="sr-only">Close</span>
               <svg className="h-5 w-5 text-zinc-300" viewBox="0 0 20 20" fill="currentColor">
@@ -103,8 +114,7 @@ const MessageAlert = ({ message, onClose }) => {
   );
 };
 
-const Messages = ({ message, onClose }) => {
- 
+const Messages: React.FC<AlertMessageProps> = ({ message, onClose }) => {
   return (
     <div className="fixed top-4 right-4 z-50 max-w-52 sm:max-w-sm w-full">
       <MessageAlert 

@@ -6,23 +6,24 @@ import { Spinner } from '../../components/Icons';
 import { useMessage } from '../../contexts/MessageContext';
 import Modal from '../../components/Modal';
 import { useDebounce } from 'use-debounce';
+import { Agent, AgentRequest, PatchedAgentRequest } from '../../api/generated/api';
 
 const AgentManagement = () => {
   const queryClient = useQueryClient();
   const { addMessage } = useMessage();
-  const [rotatingId, setRotatingId] = useState(null);
+  const [rotatingId, setRotatingId] = useState<number | null>(null);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAgent, setEditingAgent] = useState(null);
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [newAgentName, setNewAgentName] = useState('');
   const [debouncedName] = useDebounce(newAgentName, 500);
-  const [isNameAvailable, setIsNameAvailable] = useState(null);
+  const [isNameAvailable, setIsNameAvailable] = useState<boolean | null>(null);
   const [isCheckingName, setIsCheckingName] = useState(false);
-  const [selectedCapabilities, setSelectedCapabilities] = useState([]);
+  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
 
   // Store raw API keys that were just generated
-  const [newKeys, setNewKeys] = useState({});
+  const [newKeys, setNewKeys] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const validateName = async () => {
@@ -62,7 +63,7 @@ const AgentManagement = () => {
     queryFn: () => fetchCapabilities(),
   });
 
-  const rotateMutation = useMutation({
+  const rotateMutation = useMutation<Agent & { api_key: string }, Error, number>({
     mutationFn: rotateAgentApiKey,
     onSuccess: (data, agentId) => {
       addMessage({ tags: 'success', content: 'API Key rotated successfully!' });
@@ -70,7 +71,7 @@ const AgentManagement = () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
     },
     onError: (error) => {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to rotate API key';   
+      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to rotate API key';   
       addMessage({ tags: 'error', content: errorMessage });
     },
     onSettled: () => {
@@ -78,7 +79,7 @@ const AgentManagement = () => {
     }
   });
 
-  const deployMutation = useMutation({
+  const deployMutation = useMutation<Agent & { api_key: string }, Error, AgentRequest>({
     mutationFn: deployAgent,
     onSuccess: (data) => {
       addMessage({ tags: 'success', content: 'Agent deployed successfully!' });
@@ -90,12 +91,12 @@ const AgentManagement = () => {
       setIsNameAvailable(null);
     },
     onError: (error) => {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to deploy agent';     
+      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to deploy agent';     
       addMessage({ tags: 'error', content: errorMessage });
     }
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useMutation<Agent, Error, { id: number; data: PatchedAgentRequest }>({
     mutationFn: ({ id, data }) => updateAgent(id, data),
     onSuccess: () => {
       addMessage({ tags: 'success', content: 'Agent updated successfully!' });
@@ -107,12 +108,12 @@ const AgentManagement = () => {
       setIsNameAvailable(null);
     },
     onError: (error) => {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to update agent';
+      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to update agent';
       addMessage({ tags: 'error', content: errorMessage });
     }
   });
 
-  const handleRotateKey = (agentId) => {
+  const handleRotateKey = (agentId: number) => {
     if (window.confirm('Are you sure you want to rotate the API key? The old one will stop working immediately.')) {
       setRotatingId(agentId);
       rotateMutation.mutate(agentId);
@@ -127,7 +128,7 @@ const AgentManagement = () => {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (agent) => {
+  const handleOpenEdit = (agent: Agent) => {
     setEditingAgent(agent);
     setNewAgentName(agent.name);
     setSelectedCapabilities(agent.capabilities_detail?.map(c => c.title) || []);
@@ -135,7 +136,7 @@ const AgentManagement = () => {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAgentName || isNameAvailable === false || isCheckingName) {
         if (isNameAvailable === false) {
@@ -160,7 +161,7 @@ const AgentManagement = () => {
     }
   };
 
-  const toggleCapability = (capTitle) => {
+  const toggleCapability = (capTitle: string) => {
     setSelectedCapabilities(prev =>
       prev.includes(capTitle)
         ? prev.filter(c => c !== capTitle)

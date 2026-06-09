@@ -3,7 +3,7 @@ import axios from 'axios';
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 export const MCP_BASE_URL = import.meta.env.VITE_MCP_URL || 'http://localhost:8001';
 
-const createAxiosInstance = (baseURL) => {
+const createAxiosInstance = (baseURL: string) => {
   const instance = axios.create({
     baseURL,
     timeout: 10000,
@@ -60,7 +60,7 @@ const createAxiosInstance = (baseURL) => {
   return instance;
 };
 
-export const getMediaUrl = (path) => {
+export const getMediaUrl = (path: string | null | undefined) => {
   if (!path) return null;
   if (path.startsWith('http')) return path;
   return `${API_BASE_URL}${path}`;

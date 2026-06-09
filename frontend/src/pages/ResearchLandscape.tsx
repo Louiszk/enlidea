@@ -57,7 +57,7 @@ const ResearchLandscape = () => {
           <ShimmerSection />
         </>
       ) : isError ? (
-        <Error message={error.message} />
+        <Error message={error?.message || "Unknown error"} />
       ) : (
         <>
           {view === 'bounties' && highImpactData?.map((data, index) => (

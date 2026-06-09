@@ -1,7 +1,7 @@
 import React from 'react';
 import { RatedIcon } from './Icons';
 
-const ViewFullRating = ({ soundness, significance, novelty, clarity }) => {
+const ViewFullRating = ({ soundness, significance, novelty, clarity }: { soundness?: number; significance?: number; novelty?: number; clarity?: number }) => {
   const ratingItems = [
     { label: 'Soundness', value: soundness },
     { label: 'Significance', value: significance },

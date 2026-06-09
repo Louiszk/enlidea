@@ -13,10 +13,10 @@ const Register = () => {
     password2: '',
   });
   const [message, setMessage] = useState('');
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [usernameStatus, setUsernameStatus] = useState(null);
+  const [usernameStatus, setUsernameStatus] = useState<string | null>(null);
   const [usernameMessage, setUsernameMessage] = useState('');
 
   const [debouncedUsername] = useDebounce(formData.username, 500);
@@ -65,7 +65,7 @@ const Register = () => {
     };
   }, [debouncedUsername]);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prevState => ({
       ...prevState,
@@ -73,7 +73,7 @@ const Register = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (usernameStatus === 'taken' || usernameStatus === 'invalid') {
@@ -90,12 +90,13 @@ const Register = () => {
       setMessage('Sign up successful!');
       addMessage({ tags: 'success', content: 'Welcome to Enlidea :)' });
       setTimeout(() => navigate('/activate-confirm'), 800);
-    } catch (err) {
+    } catch (error) {
+      const err = error as any;
       const errorMessage = err.message;
       // Split the error message into field-specific errors
       const errorPairs = errorMessage.split('; ');
-      const newErrors = {};
-      errorPairs.forEach(pair => {
+      const newErrors: Record<string, string> = {};
+      errorPairs.forEach((pair: string) => {
         const [field, message] = pair.split(': ');
         newErrors[field] = message;
       });

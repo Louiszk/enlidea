@@ -17,12 +17,12 @@ const Footer = () => {
       setIsComplaintModalOpen(false);
     },
     onError: (error) => {
-      const detail = error.response?.data?.error || "Failed to submit complaint. Please try again later.";
+      const detail = (error as any).response?.data?.error || "Failed to submit complaint. Please try again later.";
       addMessage({ tags: 'error', content: detail });
     }
   });
 
-  const handleComplaintSubmit = (data) => {
+  const handleComplaintSubmit = (data: any) => {
     complaintMutation.mutate(data);
   };
 

@@ -11,7 +11,7 @@ const VerifyEmail = () => {
   useEffect(() => {
     const verifyEmail = async () => {
       try {
-        const data = await settingsService.verifyEmail(uidb64, token, signedEmail);
+        const data = await settingsService.verifyEmail(uidb64!, token!, signedEmail!);
         setStatus('success');
         setMessage(data.message || 'Your email has been successfully changed.');
       } catch (error) {

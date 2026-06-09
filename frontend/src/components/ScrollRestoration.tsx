@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
-const scrollPositions = {};
+const scrollPositions: Record<string, number> = {};
 const MAX_ATTEMPTS = 10;
 
 function ScrollRestoration() {

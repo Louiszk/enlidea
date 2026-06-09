@@ -2,12 +2,20 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { allTags, allTypes } from '../services/constants';
 
-const SortFilter = ({ sortBy, tags, types, status, slug }) => {
+export interface SortFilterProps {
+  sortBy: string;
+  tags?: string[];
+  types?: string[];
+  status?: string[];
+  slug?: string;
+}
+
+const SortFilter: React.FC<SortFilterProps> = ({ sortBy, tags, types, status, slug }) => {
   const navigate = useNavigate();
   const [localSortBy, setLocalSortBy] = useState(sortBy || 'created_desc');
-  const [localStatus, setLocalStatus] = useState(status || []);
-  const [localSelectedTags, setLocalSelectedTags] = useState(tags ? tags : (slug ? [slug] : []));
-  const [localSelectedTypes, setLocalSelectedTypes] = useState(types || []);
+  const [localStatus, setLocalStatus] = useState<string[]>(status || []);
+  const [localSelectedTags, setLocalSelectedTags] = useState<string[]>(tags ? tags : (slug ? [slug] : []));
+  const [localSelectedTypes, setLocalSelectedTypes] = useState<string[]>(types || []);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTagsDropdown, setShowTagsDropdown] = useState(false);
   const [showTypesDropdown, setShowTypesDropdown] = useState(false);
@@ -20,7 +28,7 @@ const SortFilter = ({ sortBy, tags, types, status, slug }) => {
     { value: 'failed', label: 'Failed' }
   ];
 
-  const handleSortChange = (newSortBy) => {
+  const handleSortChange = (newSortBy: string) => {
     setLocalSortBy(newSortBy);
     applyFilters(newSortBy, localStatus, localSelectedTags, localSelectedTypes);
   };
@@ -29,8 +37,8 @@ const SortFilter = ({ sortBy, tags, types, status, slug }) => {
     applyFilters(localSortBy, localStatus, localSelectedTags, localSelectedTypes);
   };
 
-  const applyFilters = (currentSortBy, currentStatus, currentTags, currentTypes) => {
-    const filters = {};
+  const applyFilters = (currentSortBy: string, currentStatus: string[], currentTags: string[], currentTypes: string[]) => {
+    const filters: { status?: string; tags?: string; types?: string } = {};
     if (currentStatus.length > 0) filters.status = currentStatus.join(',');
     if (currentTags.length > 0) filters.tags = currentTags.join(',');
     if (currentTypes.length > 0) filters.types = currentTypes.join(',');
@@ -39,7 +47,7 @@ const SortFilter = ({ sortBy, tags, types, status, slug }) => {
     navigate(`?sort=${currentSortBy}&filters=${filterString}&page=1`);
   };
 
-  const toggleStatus = (statusVal) => {
+  const toggleStatus = (statusVal: string) => {
     setLocalStatus(prev => 
       prev.includes(statusVal) 
         ? prev.filter(s => s !== statusVal)
@@ -47,7 +55,7 @@ const SortFilter = ({ sortBy, tags, types, status, slug }) => {
     );
   };
 
-  const toggleTag = (tag) => {
+  const toggleTag = (tag: string) => {
     setLocalSelectedTags(prev => 
       prev.includes(tag)
         ? prev.filter(t => t !== tag)
@@ -55,7 +63,7 @@ const SortFilter = ({ sortBy, tags, types, status, slug }) => {
     );
   };
 
-  const toggleType = (type) => {
+  const toggleType = (type: string) => {
     setLocalSelectedTypes(prev => 
       prev.includes(type)
         ? prev.filter(t => t !== type)

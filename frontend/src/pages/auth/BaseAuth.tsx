@@ -4,7 +4,7 @@ import Messages from '../../components/AlertMessage';
 import logo from '../../assets/images/logo-enlidea.png';
 import { Link } from 'react-router-dom';
 
-const BaseAuth = ({ children, showLogo = true }) => {
+const BaseAuth = ({ children, showLogo = true }: { children: React.ReactNode; showLogo?: boolean }) => {
   const { message, removeMessage } = useMessage();
 
   return (

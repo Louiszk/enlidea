@@ -12,19 +12,20 @@ const Login = () => {
   const { addMessage } = useMessage();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login({ email, password });
+      await login({ data: { email, password } });
       addMessage({ tags: 'success', content: 'Logged in successfully' });
       setTimeout(() => {
         navigate('/');
       }, 800);
     } catch (error) {
-      if (error.message === "Your email has not been verified.") {
+      const err = error as any;
+      if (err.message === "Your email has not been verified.") {
         setIsInactive(true);
       }
-      addMessage({ tags: 'error', content: error.message || 'An error occurred. Please try again.' });
+      addMessage({ tags: 'error', content: err.message || 'An error occurred. Please try again.' });
     }
   };
 
@@ -33,7 +34,8 @@ const Login = () => {
       await resendActivationEmail(email);
       addMessage({ tags: 'success', content: 'Activation email resent.' });
       setTimeout(() => navigate('/activate-confirm'), 800);
-    } catch (err) {
+    } catch (error) {
+      const err = error as any;
       addMessage({ tags: 'error', content: err.message });
     }
   };

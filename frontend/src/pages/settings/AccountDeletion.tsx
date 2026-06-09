@@ -17,7 +17,7 @@ const AccountDeletion = () => {
     setPassword('');
   };
 
-  const handleDeleteAccount = async (e) => {
+  const handleDeleteAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -28,7 +28,8 @@ const AccountDeletion = () => {
         content: 'Your account has been successfully deleted.'
       });
       logout();
-    } catch (err) {
+    } catch (error) {
+      const err = error as any;
       setError(err.message || 'An error occurred while deleting the account');
       addMessage({
         tags: 'error',

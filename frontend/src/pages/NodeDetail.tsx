@@ -13,7 +13,7 @@ import ViewFullRating from '../components/ViewFullRating';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 
-const NoNode = ({ content }) => {
+const NoNode = ({ content }: { content: string }) => {
     return (
       <div className="py-12 bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 flex items-center justify-center px-4 sm:px-6 lg:px-8 min-h-[50vh] rounded-xl">
         <div className="max-w-lg w-full space-y-8 bg-gray-900 p-10 rounded-xl shadow-2xl border border-indigo-500/20">
@@ -51,8 +51,8 @@ const NoNode = ({ content }) => {
       isLoading: nodeLoading,
       error,
     } = useQuery({
-      queryKey: ['node', parseInt(id, 10)],
-      queryFn: () => fetchNodeDetail(id),
+      queryKey: ['node', parseInt(id!, 10)],
+      queryFn: () => fetchNodeDetail(id!),
       enabled: !authLoading,
       staleTime: 1000 * 60,
     });
@@ -61,7 +61,7 @@ const NoNode = ({ content }) => {
       data: nodeBody,
     } = useQuery({
       queryKey: ['nodeBody', id],
-      queryFn: () => fetchNodeBody(id),
+      queryFn: () => fetchNodeBody(id!),
       enabled: !!node,
       staleTime: 1000 * 60 * 30,
     });
@@ -79,18 +79,18 @@ const NoNode = ({ content }) => {
       },
     });
   
-    const handleReportSubmit = (reportData) => reportMutation.mutate(reportData);
+    const handleReportSubmit = (reportData: any) => reportMutation.mutate(reportData);
     
     const Headline = () => (
       <h1 
-        className={`font-black tracking-tighter truncate ${node.title.length > 30 ? 'text-lg sm:text-xl md:text-2xl' : 'text-xl sm:text-2xl lg:text-3xl'}`} 
-        title={node.title}
+        className={`font-black tracking-tighter truncate ${node?.title && node.title.length > 30 ? 'text-lg sm:text-xl md:text-2xl' : 'text-xl sm:text-2xl lg:text-3xl'}`} 
+        title={node?.title}
       >
-        {node.title || node.type}
+        {node?.title || node?.type}
       </h1>
     );
 
-    const getStatusBadge = (status) => {
+    const getStatusBadge = (status?: string) => {
         switch (status) {
           case 'open':
             return <span className="px-3 py-1 bg-green-900/50 text-green-300 text-xs font-black rounded-md border border-green-500/30 uppercase tracking-widest">Open</span>;
@@ -113,6 +113,7 @@ const NoNode = ({ content }) => {
     if (error) {
       return <div className="max-w-3xl mx-auto p-4"><NoNode content={error.message} /></div>;
     }
+    if (!node) return null;
 
     const coordinatingAgent = node.coordinating_agent;
     const isMaintainer = user && coordinatingAgent && coordinatingAgent.maintainer_id === user.id;
@@ -215,7 +216,7 @@ const NoNode = ({ content }) => {
               </div>
               <div className="text-center">
                 <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Bounty</p>
-                <p className="text-indigo-400 font-black text-xl">{Math.floor(node.bounty_amount)} ✧</p>
+                <p className="text-indigo-400 font-black text-xl">{Math.floor(Number(node.bounty_amount || 0))} ✧</p>
               </div>
             </div>
           </div>
@@ -283,7 +284,7 @@ const NoNode = ({ content }) => {
             ) : (
               <div className="bg-gray-900/50 p-12 rounded-xl border border-dashed border-gray-700 text-center">
                 <p className="text-gray-500 italic">Content restricted or not yet submitted.</p>
-                {node.status === 'open' && node.total_assigned < node.required_collaborators && (
+                {node.status === 'open' && node.total_assigned < (node.required_collaborators || 0) && (
                   <button className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-lg transition-all shadow-lg shadow-indigo-600/20">
                     Deploy Agent to Help
                   </button>

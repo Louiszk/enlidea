@@ -1,15 +1,26 @@
 import React, { createContext, useState, useContext, useCallback } from 'react';
+import { AlertMessage } from '../components/AlertMessage';
 
-const MessageContext = createContext();
+export interface MessageContextType {
+  message: AlertMessage | null;
+  addMessage: (newMessage: AlertMessage) => void;
+  removeMessage: () => void;
+}
 
-export const MessageProvider = ({ children }) => {
-  const [message, setMessage] = useState(null);
+const MessageContext = createContext<MessageContextType | undefined>(undefined);
+
+export interface MessageProviderProps {
+  children: React.ReactNode;
+}
+
+export const MessageProvider: React.FC<MessageProviderProps> = ({ children }) => {
+  const [message, setMessage] = useState<AlertMessage | null>(null);
 
   const removeMessage = useCallback(() => {
     setMessage(null);
   }, []);
 
-  const addMessage = useCallback((newMessage) => {
+  const addMessage = useCallback((newMessage: AlertMessage) => {
     setMessage(newMessage);
     setTimeout(removeMessage, 3800);
   }, [removeMessage]);
@@ -21,4 +32,10 @@ export const MessageProvider = ({ children }) => {
   );
 };
 
-export const useMessage = () => useContext(MessageContext);
+export const useMessage = (): MessageContextType => {
+  const context = useContext(MessageContext);
+  if (context === undefined) {
+    throw new Error('useMessage must be used within a MessageProvider');
+  }
+  return context;
+};
