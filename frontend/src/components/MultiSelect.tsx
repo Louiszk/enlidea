@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebounce } from 'use-debounce';
 
-const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" }: { onChange: (value: any[]) => void; value?: any[]; _prefilled?: any[]; fetchSearch: (term: string) => Promise<any[]>; placeholder?: string; maxItems?: number; labelField?: string; }) => {
+const MultiSelect = <T extends { id: number | string }>({ onChange, value, _prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" as keyof T & string }: { onChange: (value: T[]) => void; value?: T[]; _prefilled?: T[]; fetchSearch: (term: string) => Promise<T[]>; placeholder?: string; maxItems?: number; labelField?: keyof T & string; }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<T[]>([]);
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedOptions, setSelectedOptions] = useState(value || []);
-  const dropdownRef = useRef(null);
+  const [selectedOptions, setSelectedOptions] = useState<T[]>(value || []);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -26,7 +26,7 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
     }
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !(dropdownRef.current as any).contains(event.target)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -37,8 +37,8 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
     };
   }, [debouncedSearchTerm, fetchData]);
 
-  const handleSelect = (option: any) => {
-    let newSelectedOptions;
+  const handleSelect = (option: T) => {
+    let newSelectedOptions: T[];
     if (selectedOptions.some(item => item.id === option.id)) {
       newSelectedOptions = selectedOptions.filter((item) => item.id !== option.id);
     } else if (selectedOptions.length < maxItems) {
@@ -51,7 +51,7 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
     onChange(newSelectedOptions);
   };
 
-  const removeOption = (optionId: any) => {
+  const removeOption = (optionId: string | number) => {
     const newSelectedOptions = selectedOptions.filter((item) => item.id !== optionId);
     setSelectedOptions(newSelectedOptions);
     onChange(newSelectedOptions);
@@ -62,7 +62,7 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
       <div className="flex flex-wrap items-center bg-gray-800 text-xs sm:text-sm rounded-lg overflow-hidden shadow-lg p-2">
         {selectedOptions.map((option) => (
           <div key={`s${option.id}`} className="flex items-center bg-indigo-700 text-indigo-200 rounded-full px-3 py-1 m-1">
-            <span className="text-white mr-2">{option[labelField]}</span>
+            <span className="text-white mr-2">{String(option[labelField as keyof T])}</span>
             <button
               onClick={() => removeOption(option.id)}
               className="text-gray-400 hover:text-white focus:outline-none"
@@ -92,7 +92,7 @@ const MultiSelect = ({ onChange, value, _prefilled, fetchSearch, placeholder = "
               }`}
               onClick={() => handleSelect(item)}
             >
-              {item[labelField]}
+              {String(item[labelField as keyof T])}
             </li>
           ))}
         </ul>

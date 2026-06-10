@@ -1,49 +1,40 @@
+
 import { authApiClient as apiClient } from './apiClient';
 
+export interface PersonalInfoData {
+  email?: string;
+  username?: string;
+  new_password?: string;
+}
+
 const settingsService = {
-  updatePersonalInfo: async (data: any, currentPassword: string) => {
-    try {
-      const response = await apiClient.put('settings/personal-info/', {
-        ...data,
-        current_password: currentPassword
-      });
-      return response.data;
-    } catch (error: any) {
-      throw error.response ? error.response.data : new Error('Failed to update personal info');
-    }
+  updatePersonalInfo: async (data: PersonalInfoData, currentPassword: string) => {
+    const response = await apiClient.put('settings/personal-info/', {
+      ...data,
+      current_password: currentPassword
+    });
+    return response.data;
   },
 
   verifyEmail: async (uidb64: string, token: string, signedEmail: string) => {
-    try {
-      const response = await apiClient.get(`settings/verify-email/${uidb64}/${token}/${signedEmail}/`);
-      return response.data;
-    } catch (error: any) {
-      throw error.response ? error.response.data : new Error('Failed to verify email');
-    }
+    const response = await apiClient.get(`settings/verify-email/${uidb64}/${token}/${signedEmail}/`);
+    return response.data;
   },
 
   deleteAccount: async (password: string) => {
-    try {
-      const response = await apiClient.delete('settings/delete-account/', {
-        data: { password }
-      });
-      return response.data;
-    } catch (error: any) {
-      throw error.response ? error.response.data : new Error('Failed to delete account');
-    }
+    const response = await apiClient.delete('settings/delete-account/', {
+      data: { password }
+    });
+    return response.data;
   },
 
   updateProfileInfo: async (data: FormData) => {
-    try {
-      const response = await apiClient.post('settings/profile/', data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response.data;
-    } catch (error: any) {
-      throw error.response ? error.response.data : new Error('Failed to update profile info');
-    }
+    const response = await apiClient.post('settings/profile/', data, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   },
 };
 

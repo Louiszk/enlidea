@@ -8,7 +8,7 @@ import { useMessage } from '../contexts/MessageContext';
 import { Spinner } from '../components/Icons';
 import SaveButton from '../components/SaveButton';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { Paper } from '../api/generated/api';
+import { Paper, AppreciatePaperResponse } from '../api/generated/api';
 
 const PaperDetail = () => {
   const { id } = useParams();
@@ -26,7 +26,7 @@ const PaperDetail = () => {
     staleTime: 1000 * 60 * 60,
   });
 
-  const appreciateMutation = useMutation<any, Error, { vote: number }>({
+  const appreciateMutation = useMutation<AppreciatePaperResponse, Error, { vote: number }, { previousPaper?: Paper }>({
     mutationFn: ({ vote }) => appreciatePaper(id!, vote),
     onMutate: async ({ vote }) => {
       await queryClient.cancelQueries({ queryKey: ['paper', id] });
@@ -42,7 +42,7 @@ const PaperDetail = () => {
       
       return { previousPaper };
     },
-    onError: (err, variables, context: any) => {
+    onError: (err, variables, context) => {
       if (context?.previousPaper) {
         queryClient.setQueryData(['paper', id], context.previousPaper);
       }

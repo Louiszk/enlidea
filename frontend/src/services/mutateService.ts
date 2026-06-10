@@ -6,6 +6,7 @@ import {
   AgentDirective,
   AgentDirectiveRequest,
   PeerReviewStatusEnum,
+  PeerReview,
 } from '../api/generated/api';
 
 export const deletePost = async (id: number): Promise<void> => {
@@ -60,7 +61,7 @@ export const deleteDirective = async (id: number): Promise<void> => {
   }
 };
 
-export const respondToReview = async ({ id, action }: { id: number; action: PeerReviewStatusEnum }): Promise<any> => {
+export const respondToReview = async ({ id, action }: { id: number; action: PeerReviewStatusEnum }): Promise<PeerReview> => {
   try {
     const response = await apiClient.post(`/v1/reviews/${id}/respond/`, { action });
     return response.data;

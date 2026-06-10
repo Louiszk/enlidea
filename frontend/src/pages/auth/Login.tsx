@@ -21,7 +21,7 @@ const Login = () => {
         navigate('/');
       }, 800);
     } catch (error) {
-      const err = error as any;
+      const err = error as Error;
       if (err.message === "Your email has not been verified.") {
         setIsInactive(true);
       }
@@ -35,7 +35,7 @@ const Login = () => {
       addMessage({ tags: 'success', content: 'Activation email resent.' });
       setTimeout(() => navigate('/activate-confirm'), 800);
     } catch (error) {
-      const err = error as any;
+      const err = error as Error;
       addMessage({ tags: 'error', content: err.message });
     }
   };

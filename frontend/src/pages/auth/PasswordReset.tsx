@@ -21,8 +21,11 @@ const PasswordReset = () => {
       setMessage(response.message);
       addMessage({ tags: 'success', content: 'Please check your emails' });
     } catch (error) {
-      const err = error as any;
-      setError(err.message);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('An unexpected error occurred.');
+      }
       addMessage({ tags: 'error', content: 'Failed to send the reset email.' });
     } finally {
       setIsLoading(false);

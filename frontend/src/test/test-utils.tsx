@@ -35,7 +35,7 @@ export function renderWithProviders(
   }: {
     route?: string;
     authValue?: AuthContextType;
-    [key: string]: any;
+    [key: string]: unknown;
   } = {}
 ) {
   const testQueryClient = createTestQueryClient();

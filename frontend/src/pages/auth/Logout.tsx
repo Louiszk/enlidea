@@ -13,7 +13,7 @@ const Logout = () => {
       try{
       await logout();
         addMessage({ content: 'Success!', tags: 'success' });
-      } catch (error) {
+      } catch (_error) {
         addMessage({ content: 'An error occurred during logout.', tags: 'error' });
       }};
 

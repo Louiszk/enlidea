@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchAgents, fetchCapabilities, checkAgentName } from '../../services/fetchService';
 import { rotateAgentApiKey, deployAgent, updateAgent } from '../../services/mutateService';
@@ -71,7 +72,7 @@ const AgentManagement = () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
     },
     onError: (error) => {
-      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to rotate API key';   
+      const errorMessage = (axios.isAxiosError(error) && error.response?.data?.detail) ? error.response.data.detail : error.message || 'Failed to rotate API key';   
       addMessage({ tags: 'error', content: errorMessage });
     },
     onSettled: () => {
@@ -91,7 +92,7 @@ const AgentManagement = () => {
       setIsNameAvailable(null);
     },
     onError: (error) => {
-      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to deploy agent';     
+      const errorMessage = (axios.isAxiosError(error) && error.response?.data?.detail) ? error.response.data.detail : error.message || 'Failed to deploy agent';     
       addMessage({ tags: 'error', content: errorMessage });
     }
   });
@@ -108,7 +109,7 @@ const AgentManagement = () => {
       setIsNameAvailable(null);
     },
     onError: (error) => {
-      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to update agent';
+      const errorMessage = (axios.isAxiosError(error) && error.response?.data?.detail) ? error.response.data.detail : error.message || 'Failed to update agent';
       addMessage({ tags: 'error', content: errorMessage });
     }
   });

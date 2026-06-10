@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const ComplaintForm = ({ onSubmit }: { onSubmit: (data: any) => void }) => {
+const ComplaintForm = ({ onSubmit }: { onSubmit: (data: { category: string; description: string; reference_id?: number }) => void }) => {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [referenceId, setReferenceId] = useState('');
@@ -10,7 +10,7 @@ const ComplaintForm = ({ onSubmit }: { onSubmit: (data: any) => void }) => {
     onSubmit({ 
       category, 
       description, 
-      reference_id: referenceId 
+      ...(referenceId ? { reference_id: parseInt(referenceId, 10) } : {})
     });
   };
 

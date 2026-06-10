@@ -1,8 +1,9 @@
 import React from 'react';
+import { Paper } from '../api/generated/api';
 import { Link } from 'react-router-dom';
 import { BookmarkIcon } from './Icons';
 
-const PaperCard = ({ paper }: { paper: any }) => {
+const PaperCard = ({ paper }: { paper: Paper }) => {
   const publishedDate = new Date(paper.published_date).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
@@ -30,7 +31,7 @@ const PaperCard = ({ paper }: { paper: any }) => {
           <div className="flex flex-col gap-2">
             <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Authors</span>
             <div className="flex flex-wrap gap-2">
-              {paper.authors.map((author: any, index: number) => (
+              {paper.authors.map((author, index: number) => (
                 <span key={index} className="text-sm font-bold text-indigo-400">
                   @{author.name}{index < paper.authors.length - 1 ? ',' : ''}
                 </span>

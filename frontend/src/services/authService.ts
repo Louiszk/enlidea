@@ -1,22 +1,27 @@
+import axios from 'axios';
 import { authApiClient } from './apiClient';
+import { Account } from '../api/generated/api';
 
 let isRefreshing = false;
-let refreshPromise: Promise<any> | null = null;
+let refreshPromise: Promise<unknown> | null = null;
 
 const authService = {
   login: async (email: string, password: string) => {
     try {
       const response = await authApiClient.post('/login/', { email, password });
       return { user: response.data.user };
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Login failed');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.error || 'Login failed');
+      }
+      throw new Error('Login failed');
     }
   },
 
   logout: async () => {
     try {
       await authApiClient.post('/logout/');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Logout failed', error);
     }
     isRefreshing = false;
@@ -33,7 +38,7 @@ const authService = {
       try {
         const response = await authApiClient.post('/token-refresh/');
         return response.data;
-      } catch (error: any) {
+      } catch (_error) {
         throw new Error('Failed to refresh token');
       } finally {
         isRefreshing = false;
@@ -44,20 +49,24 @@ const authService = {
     return refreshPromise;
   },
 
-  getCurrentUser: async (retry: boolean = true): Promise<any> => {
+  getCurrentUser: async (retry: boolean = true): Promise<Account> => {
     try {
       const response = await authApiClient.get('/current-user/');
       return response.data;
-    } catch (error: any) {
-      if (error.response && error.response.status === 401 && retry) {
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response && error.response.status === 401 && retry) {
         try {
           await authService.refreshToken();
           return authService.getCurrentUser(false);
-        } catch (refreshError: any) {
+        } catch (_refreshError) {
           throw new Error('Session expired');
         }
       }
-      throw new Error(error.response?.data?.detail || error.response?.data?.error || 'Failed to get current user');
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data;
+        throw new Error(data?.detail || data?.error || 'Failed to get current user');
+      }
+      throw new Error('Failed to get current user');
     }
   },
 
@@ -65,8 +74,11 @@ const authService = {
     try {
       const response = await authApiClient.get(`/activate/${uidb64}/${token}/`);
       return response.data;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Activation failed');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.error || 'Activation failed');
+      }
+      throw new Error('Activation failed');
     }
   },
 };
@@ -75,11 +87,14 @@ export const requestPasswordReset = async (email: string) => {
   try {
     const response = await authApiClient.post('/password-reset/', { email });
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 429) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 429) {
       throw new Error('Please wait 10 minutes before requesting another reset.');
     }
-    throw new Error(error.response?.data?.error || 'An error occurred while requesting password reset.');
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error || 'An error occurred while requesting password reset.');
+    }
+    throw new Error('An error occurred while requesting password reset.');
   }
 };
 
@@ -90,18 +105,25 @@ export const confirmPasswordReset = async (uidb64: string, token: string, new_pa
       new_password2,
     });
     return response.data;
-  } catch (error: any) {
-    const errorData = error.response?.data;
+  } catch (error) {
+    const errorData = axios.isAxiosError(error) ? error.response?.data : null;
     throw new Error(errorData?.error || errorData?.new_password1 || 'An error occurred while resetting the password.');
   }
 };
 
-export const register = async (userData: any) => {
+export interface RegisterPayload {
+  email: string;
+  username: string;
+  password?: string;
+  [key: string]: string | undefined;
+}
+
+export const register = async (userData: RegisterPayload) => {
   try {
     const response = await authApiClient.post('/register/', userData);
     return response.data;
-  } catch (error: any) {
-    const data = error.response?.data;
+  } catch (error) {
+    const data = axios.isAxiosError(error) ? error.response?.data : null;
     if (typeof data === 'object' && data !== null) {
       const errorMessages = Object.entries(data)
         .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
@@ -116,11 +138,14 @@ export const checkUsernameAvailability = async (username: string) => {
   try {
     const response = await authApiClient.get(`/check-username/?username=${encodeURIComponent(username)}`);
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 429) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 429) {
       throw new Error('Rate limit reached. Please wait a moment.');
     }
-    throw new Error(error.response?.data?.error || 'Failed to check username availability');
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error || 'Failed to check username availability');
+    }
+    throw new Error('Failed to check username availability');
   }
 };
 
@@ -128,8 +153,11 @@ export const resendActivationEmail = async (email: string) => {
   try {
     const response = await authApiClient.post('/resend-activation/', { email });
     return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.error || 'Failed to resend activation email');
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.error || 'Failed to resend activation email');
+    }
+    throw new Error('Failed to resend activation email');
   }
 };
 

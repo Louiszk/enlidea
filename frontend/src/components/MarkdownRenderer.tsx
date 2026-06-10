@@ -15,7 +15,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
       if (url.host === apiBase.host || url.host === 'backend:8000') {
         return url.pathname;
       }
-    } catch (e) {
+    } catch (_e) {
       // Fallback for malformed URLs or when API_BASE_URL lacks a protocol
       if (uri.includes('backend:8000') || (API_BASE_URL && uri.includes(API_BASE_URL.replace(/^https?:\/\//, '')))) {
         return uri.replace(/^https?:\/\/[^/]+/, '');

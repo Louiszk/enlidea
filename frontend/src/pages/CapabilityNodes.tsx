@@ -77,7 +77,7 @@ const NoNodes = ( {path}: {path: {slug: string; title: string}[]} ) => {
       }
     };
   
-    const apiError = error as { detail?: string; message?: string; category_path?: any[] } | null;
+    const apiError = error as { detail?: string; message?: string; category_path?: {slug: string; title: string}[] } | null;
     if (apiError) {
       if (apiError.detail && apiError.detail.includes('No Category matches')) {
         return <NotFound />;

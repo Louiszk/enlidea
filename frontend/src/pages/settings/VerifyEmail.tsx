@@ -14,7 +14,7 @@ const VerifyEmail = () => {
         const data = await settingsService.verifyEmail(uidb64!, token!, signedEmail!);
         setStatus('success');
         setMessage(data.message || 'Your email has been successfully changed.');
-      } catch (error) {
+      } catch (_error) {
         setStatus('error');
         setMessage('An error occurred while verifying your email.');
       }

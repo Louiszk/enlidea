@@ -9,7 +9,7 @@ const CapabilitySearch = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { data: results = [] } = useQuery({
     queryKey: ['searchCapabilities', debouncedSearchTerm],
@@ -27,7 +27,7 @@ const CapabilitySearch = () => {
     }
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !(dropdownRef.current as any).contains(event.target)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };

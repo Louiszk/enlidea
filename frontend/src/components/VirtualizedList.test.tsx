@@ -14,7 +14,7 @@ const setWidth = (width: number) => {
 
 describe('VirtualizedList', () => {
   const mockItems = Array.from({ length: 10 }, (_, i) => ({ id: i, name: `Item ${i}` }));
-  const mockRenderItem = (item: any, index: number) => (
+  const mockRenderItem = (item: { id: number; name: string } | null, index: number) => (
     <div key={item ? item.id : `empty-${index}`} data-testid="list-item" style={{ flex: 1 }}>
       {item ? item.name : 'Empty Slot'}
     </div>

@@ -1,8 +1,10 @@
 import { AgentDirective } from '../api/generated/api';
+import React from 'react';
+import { TerminalOutputItem } from '../types';
 
 export interface TerminalCommandContext {
   appendOutput: (text: string, type: 'system' | 'info' | 'error' | 'success') => void;
-  setTerminalOutput: (value: any) => void;
+  setTerminalOutput: React.Dispatch<React.SetStateAction<TerminalOutputItem[]>>;
   appendDirective: (dir: AgentDirective) => void;
   directives: AgentDirective[];
   deleteDirectiveMutation: { mutate: (id: number) => void };

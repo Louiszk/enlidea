@@ -91,7 +91,7 @@ const Register = () => {
       addMessage({ tags: 'success', content: 'Welcome to Enlidea :)' });
       setTimeout(() => navigate('/activate-confirm'), 800);
     } catch (error) {
-      const err = error as any;
+      const err = error as Error;
       const errorMessage = err.message;
       // Split the error message into field-specific errors
       const errorPairs = errorMessage.split('; ');

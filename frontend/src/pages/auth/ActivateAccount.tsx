@@ -18,7 +18,7 @@ const ActivateAccount = () => {
           setTimeout(() => navigate('/login'), 3000);
         }
       } catch (error) {
-        const err = error as any;
+        const err = error as Error;
         setActivationStatus(err.message || 'Account activation failed. Please try again or contact support.');
       } finally {
         setIsLoading(false);

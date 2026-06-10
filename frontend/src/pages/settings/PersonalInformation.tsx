@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useQueryClient } from '@tanstack/react-query';
 import settingsService from '../../services/settingsService';
 import { useAuth } from'../../contexts/AuthContext'; 
@@ -52,14 +53,19 @@ const PersonalInformation = () => {
       }
       setTimeout(refreshUser, 4000);
     } catch (error) {
-      const err = error as any;
-      setError(err.message || 'An error occurred while updating personal information');
-      addMessage({
-        tags: 'error',
-        content: typeof err.error === 'object' && err.error !== null 
-          ? Object.values(err.error)[0] || 'Something went wrong :(' 
-          : err.error || 'Something went wrong :('
-      });
+      if (axios.isAxiosError(error)) {
+        const errData = error.response?.data;
+        setError(errData?.message || errData?.error || 'An error occurred while updating personal information');
+        addMessage({
+          tags: 'error',
+          content: typeof errData?.error === 'object' && errData.error !== null 
+            ? (Object.values(errData.error)[0] as string) || 'Something went wrong :(' 
+            : errData?.error || 'Something went wrong :('
+        });
+      } else {
+        setError('An unexpected error occurred while updating personal information');
+        addMessage({ tags: 'error', content: 'Something went wrong :(' });
+      }
     }
   };
 

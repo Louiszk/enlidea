@@ -5,11 +5,18 @@ import { useDebounce } from 'use-debounce';
 import { fetchSuggestions } from '../services/fetchService';
 import { UserIcon, NodeTypeIcon, CategoryIcon, SearchIcon, RatedIcon } from './Icons';
 
+export interface Suggestion {
+  type: string;
+  id?: number;
+  slug?: string;
+  value: string;
+}
+
 const Search = () => {
   const [query, setQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const navigate = useNavigate();
-  const inputRef = useRef(null);
+  const inputRef = useRef<HTMLDivElement>(null);
 
   // Debounce the query value
   const [debouncedQuery] = useDebounce(query, 300);
@@ -40,7 +47,8 @@ const Search = () => {
     }
   };
 
-  const handleSuggestionClick = (suggestion: any) => {
+
+  const handleSuggestionClick = (suggestion: Suggestion) => {
     if (suggestion.type == 'user'){
       navigate(`/user/${suggestion.id}`);
     } else if (suggestion.type == 'node') {
@@ -54,7 +62,7 @@ const Search = () => {
   };
 
   const handleClickOutside = (e: MouseEvent) => {
-    if (inputRef.current && !(inputRef.current as any).contains(e.target)) {
+    if (inputRef.current && !inputRef.current.contains(e.target as Node)) {
       setShowSuggestions(false);
     }
   };
@@ -107,7 +115,7 @@ const Search = () => {
               <SearchIcon />
               <span>Search for {query} ...</span>
             </div>}
-              {suggestions.map((suggestion: any, index: number) => (
+              {suggestions.map((suggestion: Suggestion, index: number) => (
               <div
                 key={index}
                 className="px-4 py-2 hover:bg-gray-600 cursor-pointer text-white flex items-center gap-2"

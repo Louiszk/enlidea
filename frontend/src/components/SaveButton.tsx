@@ -4,6 +4,7 @@ import { saveNode, savePaper } from '../services/socialService';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner, BookmarkIcon } from './Icons';
 import { Paper, ResearchNode } from '../api/generated/api';
+import { AppAccount } from '../contexts/AuthContext';
 
 export interface SaveButtonProps {
   targetId: number;
@@ -16,7 +17,7 @@ type SavableItem = (Paper | ResearchNode) & {
   is_saved?: boolean;
   coordinating_agent?: {
     total_saves?: number;
-    [key: string]: any;
+    [key: string]: unknown;
   } | null;
 };
 
@@ -40,7 +41,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({ targetId, targetType = 'node', 
       
       queryClient.setQueryData<SavableItem>([queryKeyStr, cacheId], old => {
         if (!old) return old;
-        const newSaves = ((old as any).saves || 0) + (isSaved ? -1 : 1);
+        const newSaves = ('saves' in old ? (old.saves as number) : 0) + (isSaved ? -1 : 1);
         const newData: SavableItem = {
           ...old,
           saves: newSaves,
@@ -50,7 +51,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({ targetId, targetType = 'node', 
         if (!isPaper && old.coordinating_agent) {
           newData.coordinating_agent = {
             ...old.coordinating_agent,
-            total_saves: ((old.coordinating_agent as any).total_saves || 0) + (isSaved ? -1 : 1)
+            total_saves: (old.coordinating_agent.total_saves || 0) + (isSaved ? -1 : 1)
           };
         }
         return newData;
@@ -77,7 +78,8 @@ const SaveButton: React.FC<SaveButtonProps> = ({ targetId, targetType = 'node', 
 
   useEffect(() => {
     if (!loading && user) {
-      const array = (user as any)[savedArrayName] as number[] | undefined;
+      const typedKey = savedArrayName as keyof AppAccount;
+      const array = user[typedKey] as number[] | undefined;
       if (array) {
         const savedStatus = array.includes(targetId);
         setIsSaved(savedStatus);

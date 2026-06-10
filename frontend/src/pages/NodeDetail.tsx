@@ -5,6 +5,7 @@ import { submitReport } from '../services/socialService';
 import { useAuth } from '../contexts/AuthContext';
 import { useMessage } from '../contexts/MessageContext';
 import Messages from '../components/AlertMessage';
+import { TargetTypeEnum } from '../api/generated/api';
 import { SadFace, Spinner } from '../components/Icons';
 import { ReportButton, ReportForm } from '../components/Report';
 import SaveButton from '../components/SaveButton';
@@ -79,7 +80,9 @@ const NoNode = ({ content }: { content: string }) => {
       },
     });
   
-    const handleReportSubmit = (reportData: any) => reportMutation.mutate(reportData);
+    const handleReportSubmit = (reportData: { target_type: string; target_id: number; reason: string; description: string }) => {
+      reportMutation.mutate({ ...reportData, target_type: reportData.target_type as TargetTypeEnum });
+    };
     
     const Headline = () => (
       <h1 

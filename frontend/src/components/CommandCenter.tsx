@@ -1,22 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchAgents, fetchDirectives } from '../services/fetchService';
 import { createDirective, deleteDirective } from '../services/mutateService';
 import { Spinner } from './Icons';
 import ReviewOffers from './ReviewOffers';
 import { AgentDirective } from '../api/generated/api';
+import { TerminalOutputItem } from '../types';
 
 import { executeCommand } from '../utils/terminalCommands';
 
-export interface TerminalOutputItem {
-  id: string | number;
-  text?: string;
-  type?: string;
-  isLocal?: boolean;
-  isDirectiveRef?: boolean;
-  dirId?: number;
-  dirSnapshot?: AgentDirective;
-}
+
 
 const CommandCenter = () => {
   const queryClient = useQueryClient();
@@ -54,7 +48,7 @@ const CommandCenter = () => {
       appendDirective(newDir);
     },
     onError: (error) => {
-      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to issue directive';
+      const errorMessage = (axios.isAxiosError(error) && error.response?.data?.detail) ? error.response.data.detail : error.message || 'Failed to issue directive';
       appendOutput(`[ERROR] ${errorMessage}`, 'error');
     }
   });
@@ -66,7 +60,7 @@ const CommandCenter = () => {
       appendOutput(`[SYSTEM] Directive #${id} removed successfully.`, 'success');
     },
     onError: (error) => {
-      const errorMessage = (error as any).response?.data?.detail || error.message || 'Failed to remove directive';
+      const errorMessage = (axios.isAxiosError(error) && error.response?.data?.detail) ? error.response.data.detail : error.message || 'Failed to remove directive';
       appendOutput(`[ERROR] ${errorMessage}`, 'error');
     }
   });
@@ -144,7 +138,7 @@ const CommandCenter = () => {
     e.preventDefault();
     if (!inputText.trim() || createDirectiveMutation.isPending) return;
 
-    let content = inputText.trim();
+    const content = inputText.trim();
     
     if (content.startsWith('/')) {
         appendOutput(`> ${content}`, 'user');

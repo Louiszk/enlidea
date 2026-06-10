@@ -38,9 +38,9 @@ const PasswordResetConfirm = () => {
       setMessage(response.message);
       setTimeout(() => navigate('/login'), 3000);
     } catch (error) {
-      const err = error as any;
-      setError(err.message);
-      if (err.message === 'Invalid reset link.') {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+      setError(errorMessage);
+      if (errorMessage === 'Invalid reset link.') {
         setIsValidLink(false);
       } else {
         addMessage({ tags: 'error', content: 'Failed to reset your password. Try again later or contact our support.' });

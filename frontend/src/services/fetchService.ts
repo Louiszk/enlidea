@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { apiClient } from './apiClient';
 import {
   Capability,
@@ -14,12 +15,14 @@ import {
   TrendingResponse,
   HighImpactCategory,
 } from '../api/generated/api';
+import { UserProfile } from '../types';
+import { Suggestion } from '../components/Search';
 
 export const fetchCapabilitySearch = async (query: string): Promise<Capability[]> => {
   try {
     const response = await apiClient.get<Capability[]>('/v1/capabilities/search/', { params: { q: query } });
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Network response was not ok');
   }
 };
@@ -28,7 +31,7 @@ export const fetchKeywords = async (query: string): Promise<ResearchKeyword[]> =
   try {
     const response = await apiClient.get<ResearchKeyword[]>('/v1/keywords/search/', { params: { q: query } });
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Network response was not ok');
   }
 };
@@ -38,12 +41,12 @@ export const fetchCapabilities = async (parent: number | string | null = null): 
     const params = parent ? { parent } : {};
     const response = await apiClient.get<Capability[]>('/v1/capabilities/', { params });
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Network response was not ok');
   }
 };
 
-export const fetchPapers = async (page: number = 1, filters: any = null, saved: boolean = false): Promise<PaperListResponse> => {
+export const fetchPapers = async (page: number = 1, filters: Record<string, unknown> | null = null, saved: boolean = false): Promise<PaperListResponse> => {
   try {
     const params: { page: number; filters?: string; saved?: boolean } = { page };
     if (filters) {
@@ -54,7 +57,7 @@ export const fetchPapers = async (page: number = 1, filters: any = null, saved: 
     }
     const response = await apiClient.get<PaperListResponse>('/v1/papers/', { params });
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to fetch papers');
   }
 };
@@ -63,7 +66,7 @@ export const fetchPaperDetail = async (id: number | string): Promise<Paper> => {
   try {
     const response = await apiClient.get<Paper>(`/v1/papers/${id}/`);
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to fetch paper detail');
   }
 };
@@ -74,8 +77,8 @@ export const fetchCapabilityNodes = async (capabilitySlug: string, page: number,
       params: { page, sort: sortBy, capability: capabilitySlug, filters: filterString }
     });
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 404) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
       throw error.response.data;
     }
     throw new Error('Failed to fetch capability nodes');
@@ -86,10 +89,10 @@ export const fetchNodeDetail = async (id: number | string): Promise<ResearchNode
   try {
     const response = await apiClient.get<ResearchNode>(`/v1/nodes/${id}/`);
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 404) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
       throw new Error('Maybe the node was deleted?');
-    } else if (error.response && error.response.status === 403) {
+    } else if (axios.isAxiosError(error) && error.response && error.response.status === 403) {
       throw new Error(error.response.data.detail || 'You do not have permission to view this node');
     }
     throw new Error('An error occurred while fetching the node detail');
@@ -100,20 +103,20 @@ export const fetchNodeBody = async (id: number | string): Promise<string> => {
   try {
     const response = await apiClient.get<ResearchNode>(`/v1/nodes/${id}/`);
     return response.data.body;
-  } catch (error: any) {
-    if (error.response && (error.response.status === 403 || error.response.status === 401)) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && (error.response.status === 403 || error.response.status === 401)) {
       throw new Error('You do not have permission to view this node content.');
     }
     throw new Error('An error occurred while fetching the node content');
   }
 };
 
-export const fetchUserProfile = async (userId: number | string): Promise<any> => {
+export const fetchUserProfile = async (userId: number | string): Promise<UserProfile> => {
   try {
     const response = await apiClient.get(`/dashboard/user/${userId}/`);
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 404) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
       throw new Error(error.response.data.message || error.response.data.detail);
     }
     throw new Error('Failed to fetch Maintainer Profile');
@@ -130,8 +133,8 @@ export const fetchSavedNodes = async (userId: number | string | undefined, isSav
     }
     const response = await apiClient.get<ResearchNodeListResponse>('/v1/nodes/', { params });
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 404) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
       throw new Error(error.response.data.message || error.response.data.detail);
     }
     throw new Error('Failed to fetch Research Nodes');
@@ -158,11 +161,11 @@ export const fetchHighImpactData = async (): Promise<HighImpactCategory[]> => {
   }
 };
 
-export const fetchSuggestions = async (query: string): Promise<any> => {
+export const fetchSuggestions = async (query: string): Promise<Suggestion[]> => {
   try {
     const response = await apiClient.get('/v1/suggestions/', { params: { q: query } });
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Network response was not ok');
   }
 };
@@ -171,7 +174,7 @@ export const fetchSearchResults = async (query: string | null, page: number = 1)
   try {
     const response = await apiClient.get<SearchResultItem[]>('/v1/search/', { params: { q: query, page } });
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Network response was not ok');
   }
 };
@@ -180,7 +183,7 @@ export const fetchAgents = async (): Promise<Agent[]> => {
   try {
     const response = await apiClient.get<Agent[]>('/v1/agents/');
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to fetch agents');
   }
 };
@@ -191,11 +194,11 @@ export const fetchActiveAssignments = async (page: number = 1, sortBy?: string, 
       params: { page, sort: sortBy, search: searchTerm }
     });
     return response.data;
-  } catch (error: any) {
-    if (error.response && error.response.status === 404) {
-      return { nodes: [] } as any;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
+      return { nodes: [], total_pages: 1 } as unknown as ResearchNodeListResponse;
     }
-    if (error.response && error.response.data && error.response.data.detail) {
+    if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.detail) {
       throw new Error(error.response.data.detail);
     }
     throw new Error('Failed to fetch Active Assignments');
@@ -206,7 +209,7 @@ export const fetchDirectives = async (): Promise<AgentDirective[]> => {
   try {
     const response = await apiClient.get<AgentDirective[]>('/v1/directives/');
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to fetch directives');
   }
 };
@@ -215,7 +218,7 @@ export const fetchPendingReviews = async (): Promise<PeerReview[]> => {
   try {
     const response = await apiClient.get<PeerReview[]>('/v1/reviews/');
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to fetch review offers');
   }
 };
@@ -224,7 +227,7 @@ export const checkAgentName = async (name: string): Promise<CheckAgentNameRespon
   try {
     const response = await apiClient.get<CheckAgentNameResponse>('/v1/agents/check_name/', { params: { name } });
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to check agent name availability');
   }
 };

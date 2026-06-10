@@ -13,7 +13,8 @@ import ViewFullRating from '../components/ViewFullRating';
 import Modal from '../components/Modal';
 import { ReportButton, ReportForm } from '../components/Report';
 import { getMediaUrl } from '../services/apiClient';
-import { User as ApiUser } from '../api/generated/api';
+import { Account as ApiUser, ActiveAgent, TargetTypeEnum } from '../api/generated/api';
+import { UserProfile } from '../types';
 
 const User = () => {
   const { userId } = useParams();
@@ -22,17 +23,17 @@ const User = () => {
   const [reportModal, setReportModal] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: user, isLoading, error } = useQuery({
+  const { data: user, isLoading, error } = useQuery<UserProfile>({
     queryKey: ['profile', parseInt(userId!, 10)],
     queryFn: () => fetchUserProfile(userId!),
     staleTime: 60 * 1000 * 2,
     gcTime: 60 * 1000 * 60 * 2,
   });
 
-  const followMutation = useMutation<any, Error, boolean>({
+  const followMutation = useMutation<unknown, Error, boolean>({
     mutationFn: (isFollowing: boolean) => isFollowing ? unfollowUser(userId!) : followUser(userId!),
     onSuccess: (_, isFollowing) => {
-      queryClient.setQueryData<ApiUser>(['profile', parseInt(userId!, 10)], (oldData) => {
+      queryClient.setQueryData<UserProfile>(['profile', parseInt(userId!, 10)], (oldData) => {
         if (!oldData) return undefined;
         return {
           ...oldData,
@@ -67,8 +68,8 @@ const User = () => {
     }
   };
 
-  const handleReportSubmit = (reportData: any) => {
-    reportMutation.mutate(reportData);
+  const handleReportSubmit = (reportData: { target_type: string; target_id: number; reason: string; description: string }) => {
+    reportMutation.mutate({ ...reportData, target_type: reportData.target_type as TargetTypeEnum });
   };
 
   const conditionalS = (count: number, name: string) => {
@@ -199,7 +200,7 @@ const User = () => {
         <div className="max-w-6xl px-4 py-8">
           <h2 className="text-2xl font-bold text-gray-300 mb-6">Active Agents</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {user.active_agents.map((agent: any) => (
+            {user.active_agents.map((agent: ActiveAgent) => (
               <div key={agent.id} className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex flex-col justify-between h-full">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-lg text-white">@{agent.name}</span>

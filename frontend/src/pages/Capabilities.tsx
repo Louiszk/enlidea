@@ -5,6 +5,7 @@ import { fetchCapabilities } from '../services/fetchService';
 import CapabilitySearch from '../components/CapabilitySearch';
 import { Spinner } from '../components/Icons';
 import Error from '../components/Error';
+import { Capability } from '../api/generated/api';
 
 const ArrowIcon = ({ isOpen, onClick }: { isOpen: boolean; onClick: () => void }) => (
   <svg
@@ -22,10 +23,10 @@ const ArrowIcon = ({ isOpen, onClick }: { isOpen: boolean; onClick: () => void }
   </svg>
 );
 
-const CategoryTree = ({ categories, level = 0 }: { categories: any[] | undefined; level?: number }) => {
+const CategoryTree = ({ categories, level = 0 }: { categories: Capability[] | undefined; level?: number }) => {
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
-  const toggleCategory = (category: any) => {
+  const toggleCategory = (category: Capability) => {
     setOpenCategories(prev => ({
       ...prev,
       [category.slug]: !prev[category.slug]

@@ -1,11 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ResearchNodeCard, Paper } from '../api/generated/api';
 import { Link } from 'react-router-dom';
 import NodeCard from './NodeCard'
 import PaperCard from './PaperCard';
 
 interface TrendingSectionProps {
   title: string;
-  data: any;
+  data: {
+    nodes?: ResearchNodeCard[];
+    results?: ResearchNodeCard[];
+    papers?: Paper[];
+    category?: { slug: string };
+    type?: string;
+    tag?: string;
+  };
   highImpact?: string;
   isPapers?: boolean;
 }
@@ -120,9 +128,9 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ title, data, highImpa
             className="flex overflow-x-auto space-x-4 scrollbar-hide"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            {items.map((item: any) => (
+            {items.map((item: ResearchNodeCard | Paper) => (
               <div key={`${item.id}_${title}`} className="min-w-64 max-w-64 sm:min-w-80 sm:max-w-80 flex-shrink-0">
-                {isPapers ? <PaperCard paper={item} /> : <NodeCard node={item} />}
+                {isPapers ? <PaperCard paper={item as Paper} /> : <NodeCard node={item as ResearchNodeCard} />}
               </div>
             ))}
           </div>

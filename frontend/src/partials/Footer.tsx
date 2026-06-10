@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Modal from '../components/Modal';
 import ComplaintForm from '../components/ComplaintForm';
 import { useMutation } from '@tanstack/react-query';
+import axios from 'axios';
 import { submitComplaint } from '../services/socialService';
 import { useMessage } from '../contexts/MessageContext';
 
@@ -17,12 +18,12 @@ const Footer = () => {
       setIsComplaintModalOpen(false);
     },
     onError: (error) => {
-      const detail = (error as any).response?.data?.error || "Failed to submit complaint. Please try again later.";
+      const detail = (axios.isAxiosError(error) && error.response?.data?.error) ? error.response.data.error : "Failed to submit complaint. Please try again later.";
       addMessage({ tags: 'error', content: detail });
     }
   });
 
-  const handleComplaintSubmit = (data: any) => {
+  const handleComplaintSubmit = (data: { category: string; description: string; reference_id?: number }) => {
     complaintMutation.mutate(data);
   };
 
