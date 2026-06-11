@@ -68,10 +68,10 @@ const SearchResults = () => {
   });
 
   const allResults = data ? data.pages.flatMap(page => page) : [];
-  const users = (allResults.find(result => result.type === 'users')?.data || []) as Account[];
-  const capabilities = (allResults.find(result => result.type === 'capabilities')?.data || []) as Capability[];
-  const nodes = (allResults.flatMap(result => (result.type === 'nodes') ? result.data : []) || []) as ResearchNodeCard[];
-  const papers = (allResults.find(result => result.type === 'papers')?.data || []) as Paper[];
+  const users = (allResults.find(result => result.type === 'users')?.results || []) as Account[];
+  const capabilities = (allResults.find(result => result.type === 'capabilities')?.results || []) as Capability[];
+  const nodes = (allResults.flatMap(result => (result.type === 'nodes') ? result.results : []) || []) as ResearchNodeCard[];
+  const papers = (allResults.find(result => result.type === 'papers')?.results || []) as Paper[];
 
   const getIcon = (type: string) => {
     switch (type) {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMessage } from '../../contexts/MessageContext';
 import { resendActivationEmail } from '../../services/authService';
@@ -21,11 +22,16 @@ const Login = () => {
         navigate('/');
       }, 800);
     } catch (error) {
-      const err = error as Error;
-      if (err.message === "Your email has not been verified.") {
-        setIsInactive(true);
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error || error.message;
+        if (message === "Your email has not been verified.") {
+          setIsInactive(true);
+        }
+        addMessage({ tags: 'error', content: message || 'An error occurred. Please try again.' });
+      } else {
+        const err = error as Error;
+        addMessage({ tags: 'error', content: err.message || 'An error occurred. Please try again.' });
       }
-      addMessage({ tags: 'error', content: err.message || 'An error occurred. Please try again.' });
     }
   };
 

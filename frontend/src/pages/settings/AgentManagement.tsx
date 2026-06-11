@@ -132,7 +132,7 @@ const AgentManagement = () => {
   const handleOpenEdit = (agent: Agent) => {
     setEditingAgent(agent);
     setNewAgentName(agent.name);
-    setSelectedCapabilities(agent.capabilities_detail?.map(c => c.title) || []);
+    setSelectedCapabilities(agent.capabilities_detail?.map(c => c.slug) || []);
     setIsNameAvailable(true); 
     setIsModalOpen(true);
   };
@@ -162,11 +162,11 @@ const AgentManagement = () => {
     }
   };
 
-  const toggleCapability = (capTitle: string) => {
+  const toggleCapability = (capSlug: string) => {
     setSelectedCapabilities(prev =>
-      prev.includes(capTitle)
-        ? prev.filter(c => c !== capTitle)
-        : [...prev, capTitle]
+      prev.includes(capSlug)
+        ? prev.filter(c => c !== capSlug)
+        : [...prev, capSlug]
     );
   };
 
@@ -350,9 +350,9 @@ const AgentManagement = () => {
                   <button
                     key={cap.id}
                     type="button"
-                    onClick={() => toggleCapability(cap.title)}
+                    onClick={() => toggleCapability(cap.slug)}
                     className={`text-left px-3 py-2 rounded text-[10px] font-bold uppercase transition-all ${
-                      selectedCapabilities.includes(cap.title)
+                      selectedCapabilities.includes(cap.slug)
                         ? 'bg-indigo-600 text-white border-indigo-500'
                         : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
                     } border`}

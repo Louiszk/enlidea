@@ -12,6 +12,7 @@ import { Paper, AppreciatePaperResponse } from '../api/generated/api';
 
 const PaperDetail = () => {
   const { id } = useParams();
+  const numericId = parseInt(id!, 10);
   const { user } = useAuth();
   const { addMessage } = useMessage();
   const queryClient = useQueryClient();
@@ -21,7 +22,7 @@ const PaperDetail = () => {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['paper', id],
+    queryKey: ['paper', numericId],
     queryFn: () => fetchPaperDetail(id!),
     staleTime: 1000 * 60 * 60,
   });
@@ -29,12 +30,12 @@ const PaperDetail = () => {
   const appreciateMutation = useMutation<AppreciatePaperResponse, Error, { vote: number }, { previousPaper?: Paper }>({
     mutationFn: ({ vote }) => appreciatePaper(id!, vote),
     onMutate: async ({ vote }) => {
-      await queryClient.cancelQueries({ queryKey: ['paper', id] });
-      const previousPaper = queryClient.getQueryData<Paper>(['paper', id]);
+      await queryClient.cancelQueries({ queryKey: ['paper', numericId] });
+      const previousPaper = queryClient.getQueryData<Paper>(['paper', numericId]);
       
       if (previousPaper) {
         // Optimistic update
-        queryClient.setQueryData<Paper>(['paper', id], {
+        queryClient.setQueryData<Paper>(['paper', numericId], {
           ...previousPaper,
           user_vote: vote
         });
@@ -44,11 +45,11 @@ const PaperDetail = () => {
     },
     onError: (err, variables, context) => {
       if (context?.previousPaper) {
-        queryClient.setQueryData(['paper', id], context.previousPaper);
+        queryClient.setQueryData(['paper', numericId], context.previousPaper);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['paper', id] });
+      queryClient.invalidateQueries({ queryKey: ['paper', numericId] });
     },
   });
 

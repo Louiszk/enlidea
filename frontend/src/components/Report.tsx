@@ -34,7 +34,7 @@ interface ReportFormProps {
     description: string;
     target_type: string;
     target_id: number;
-    node_id?: number | string;
+    node_id?: number;
   }) => void;
   target: {
     id: number;
@@ -57,7 +57,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({ onSubmit, target, target
       description,
       target_type: targetType,
       target_id: target.id,
-      node_id: nodeId,
+      node_id: nodeId ? parseInt(String(nodeId), 10) : undefined,
     });
   };
 

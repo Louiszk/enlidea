@@ -1,10 +1,6 @@
 import axios from 'axios';
 import { authApiClient } from './apiClient';
 import { Account } from '../api/generated/api';
-
-let isRefreshing = false;
-let refreshPromise: Promise<unknown> | null = null;
-
 const authService = {
   login: async (email: string, password: string) => {
     try {
@@ -24,44 +20,22 @@ const authService = {
     } catch (error) {
       console.error('Logout failed', error);
     }
-    isRefreshing = false;
-    refreshPromise = null;
   },
 
   refreshToken: async () => {
-    if (isRefreshing) {
-      return refreshPromise;
+    try {
+      const response = await authApiClient.post('/token-refresh/');
+      return response.data;
+    } catch (_error) {
+      throw new Error('Failed to refresh token');
     }
-
-    isRefreshing = true;
-    refreshPromise = (async () => {
-      try {
-        const response = await authApiClient.post('/token-refresh/');
-        return response.data;
-      } catch (_error) {
-        throw new Error('Failed to refresh token');
-      } finally {
-        isRefreshing = false;
-        refreshPromise = null;
-      }
-    })();
-
-    return refreshPromise;
   },
 
-  getCurrentUser: async (retry: boolean = true): Promise<Account> => {
+  getCurrentUser: async (): Promise<Account> => {
     try {
       const response = await authApiClient.get('/current-user/');
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response && error.response.status === 401 && retry) {
-        try {
-          await authService.refreshToken();
-          return authService.getCurrentUser(false);
-        } catch (_refreshError) {
-          throw new Error('Session expired');
-        }
-      }
       if (axios.isAxiosError(error)) {
         const data = error.response?.data;
         throw new Error(data?.detail || data?.error || 'Failed to get current user');

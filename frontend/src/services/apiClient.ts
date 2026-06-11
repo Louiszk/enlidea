@@ -1,7 +1,16 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 export const MCP_BASE_URL = import.meta.env.VITE_MCP_URL || 'http://localhost:8001';
+
+// State variables to prevent multiple simultaneous refresh requests
+let isRefreshing = false;
+let refreshPromise: Promise<unknown> | null = null;
+
+// Extend the Axios config to include a custom flag so we don't infinite loop
+interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 const createAxiosInstance = (baseURL: string) => {
   const instance = axios.create({
@@ -10,49 +19,63 @@ const createAxiosInstance = (baseURL: string) => {
     withCredentials: true,
   });
 
+  // --- REQUEST INTERCEPTOR (Your existing CSRF logic goes here) ---
   instance.interceptors.request.use(
-    (config) => config,
+    (config) => {
+      // (Keep your existing CSRF token logic here if you have any)
+      return config;
+    },
     (error) => Promise.reject(error)
   );
 
+  // --- RESPONSE INTERCEPTOR (Auto-Refresh Logic) ---
   instance.interceptors.response.use(
     (response) => response,
-    async (error) => {
-      const originalRequest = error.config;
-      
-      // Prevent infinite loops if the refresh token request itself fails
-      if (originalRequest.url.includes('/token-refresh/')) {
-        return Promise.reject(error);
-      }
+    async (error: AxiosError) => {
+      const originalRequest = error.config as CustomAxiosRequestConfig;
 
-      // If we already retried this request, don't try again
-      if (originalRequest._retry) {
-        // If current-user fails even after retry, logout to prevent loops
-        if (originalRequest.url.includes('/current-user/')) {
-          const { default: authService } = await import('./authService');
-          authService.logout();
-        }
-        return Promise.reject(error);
-      }
-
-      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // If error is 401, we haven't retried yet, and it's not the login/refresh endpoint itself
+      if (
+        error.response?.status === 401 &&
+        originalRequest &&
+        !originalRequest._retry &&
+        !originalRequest.url?.includes('/login/') &&
+        !originalRequest.url?.includes('/token-refresh/')
+      ) {
         originalRequest._retry = true;
+
+        if (!isRefreshing) {
+          isRefreshing = true;
+          
+          // Use a raw axios call to bypass interceptors and avoid infinite loops
+          refreshPromise = axios.post(
+            `${API_BASE_URL}/auth-api/token-refresh/`,
+            {},
+            { withCredentials: true }
+          ).finally(() => {
+            isRefreshing = false;
+            refreshPromise = null;
+          });
+        }
+
         try {
-          const { default: authService } = await import('./authService');
-          await authService.refreshToken();
+          // Wait for the token to be refreshed
+          await refreshPromise;
+          // Retry the original request with the new cookies
           return instance(originalRequest);
         } catch (refreshError) {
-          // Refresh failed - clean up and redirect
+          // If the refresh token is also expired, the refresh call will fail.
+          // You can optionally trigger a hard logout here or redirect to /login
           const { default: authService } = await import('./authService');
           authService.logout();
           
-          // Only redirect to login if we weren't already going there
           if (!window.location.pathname.includes('/login')) {
             window.location.href = '/login';
           }
           return Promise.reject(refreshError);
         }
       }
+
       return Promise.reject(error);
     }
   );
