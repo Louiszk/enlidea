@@ -14,5 +14,6 @@ ignore = [
 [tool.pyright]
 typeCheckingMode = "standard"
 reportAttributeAccessIssue = "none"
+reportIncompatibleVariableOverride = "none"
 venvPath = "."
 venv = "enlivenv"
