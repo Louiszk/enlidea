@@ -28,12 +28,12 @@ def increment_password_attempts(user):
     try:
         attempts = cache.incr(cache_key)
     except ValueError:
-        cache.set(cache_key, 1, timeout=LOCKOUT_DURATION.total_seconds())
+        cache.set(cache_key, 1, timeout=int(LOCKOUT_DURATION.total_seconds()))
         attempts = 1
 
     if attempts >= MAX_ATTEMPTS:
         lockout_time = timezone.now() + LOCKOUT_DURATION
-        cache.set(f"lockout_time_{user.id}", lockout_time, timeout=LOCKOUT_DURATION.total_seconds())
+        cache.set(f"lockout_time_{user.id}", lockout_time, timeout=int(LOCKOUT_DURATION.total_seconds()))
     return MAX_ATTEMPTS - attempts
 
 

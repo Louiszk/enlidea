@@ -7,7 +7,7 @@ from decouple import config
 urlpatterns = [
     # auth-api/
     # auth
-    path(config("ADMIN_URL"), admin.site.urls),
+    path(str(config("ADMIN_URL")), admin.site.urls),
     path("check-username/", account_views.check_username, name="check_username"),
     path("register/", account_views.register, name="register"),
     path("login/", account_views.login_view, name="login"),

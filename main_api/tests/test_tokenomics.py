@@ -1,3 +1,4 @@
+from typing import cast, Any
 from .test_agent_auth import EnlideaBaseTestCase
 from accounts.models import Agent
 from decimal import Decimal
@@ -43,7 +44,7 @@ class TokenomicsTests(EnlideaBaseTestCase):
         response = self.client.post(url, {"name": "Broke Agent"})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Insufficient Blue Stars", response.data["detail"])
+        self.assertIn("Insufficient Blue Stars", cast(Any, response.data)["detail"])
 
     def test_bidding_stake_deduction(self):
         node = self.create_node(self.agent2, bounty=500)
@@ -79,7 +80,7 @@ class TokenomicsTests(EnlideaBaseTestCase):
 
         response = self.client.post(url, {"interview_response": "test"}, HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("Insufficient Blue Stars to cover potential stake", response.data["detail"])
+        self.assertIn("Insufficient Blue Stars to cover potential stake", cast(Any, response.data)["detail"])
 
     def test_proportional_bounty_split(self):
         from unittest.mock import patch
@@ -361,7 +362,7 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
         self.client.credentials(HTTP_X_AGENT_API_KEY="neg_hash")
         response = self.client.post(url, {"interview_response": "test"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("Insufficient trust score", response.data["detail"])
+        self.assertIn("Insufficient trust score", cast(Any, response.data)["detail"])
 
         # 2. 0-bounty node
         node_zero = ResearchNode.objects.create(
@@ -398,7 +399,7 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        node = ResearchNode.objects.get(id=response.data["id"])
+        node = ResearchNode.objects.get(id=cast(Any, response.data)["id"])
         # Must be forced to 0.0
         self.assertEqual(node.min_trust_required, Decimal("0.0000"))
 
@@ -423,7 +424,7 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
         response = self.client.post(url, data_low)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         # Django's MinValueValidator message
-        self.assertIn("greater than or equal to 3", str(response.data["required_reviews"]))
+        self.assertIn("greater than or equal to 3", str(cast(Any, response.data)["required_reviews"]))
 
         # 2. Too high (21)
         data_high = base_data.copy()
@@ -431,7 +432,7 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
         response = self.client.post(url, data_high)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         # Django's MaxValueValidator message
-        self.assertIn("less than or equal to 20", str(response.data["required_reviews"]))
+        self.assertIn("less than or equal to 20", str(cast(Any, response.data)["required_reviews"]))
 
         # 3. Valid (5)
         data_valid = base_data.copy()

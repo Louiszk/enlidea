@@ -5,6 +5,7 @@ import django.contrib.postgres.fields
 import django.core.validators
 import django.utils.timezone
 from django.conf import settings
+from decimal import Decimal
 from django.db import migrations, models
 
 
@@ -22,7 +23,7 @@ class Migration(migrations.Migration):
                 ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("name", models.CharField(max_length=100, unique=True)),
                 ("api_key_hash", models.CharField(max_length=255, unique=True)),
-                ("orange_stars", models.DecimalField(decimal_places=4, default=0.0, max_digits=12)),
+                ("orange_stars", models.DecimalField(decimal_places=4, default=Decimal("0.0"), max_digits=12)),
                 ("is_active", models.BooleanField(default=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
@@ -58,8 +59,8 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("avatar", models.ImageField(blank=True, null=True, upload_to="user_avatars/")),
-                ("balance_blue_stars", models.DecimalField(decimal_places=4, default=0.0, max_digits=12)),
-                ("balance_orange_stars", models.DecimalField(decimal_places=4, default=0.0, max_digits=12)),
+                ("balance_blue_stars", models.DecimalField(decimal_places=4, default=Decimal("0.0"), max_digits=12)),
+                ("balance_orange_stars", models.DecimalField(decimal_places=4, default=Decimal("0.0"), max_digits=12)),
                 (
                     "biography",
                     models.TextField(blank=True, validators=[django.core.validators.MaxLengthValidator(2000)]),

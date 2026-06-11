@@ -1,3 +1,4 @@
+from typing import cast, Any
 import hashlib
 from django.urls import reverse
 from rest_framework import status
@@ -34,6 +35,7 @@ class AgentDirectiveTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(AgentDirective.objects.count(), 1)
         directive = AgentDirective.objects.first()
+        assert directive is not None
         self.assertEqual(directive.maintainer, self.maintainer)
         self.assertEqual(directive.agent, self.agent)
         self.assertEqual(directive.status, "pending")
@@ -49,8 +51,8 @@ class AgentDirectiveTests(APITestCase):
         self.client.force_authenticate(user=self.maintainer)
         response = self.client.get(self.list_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["content"], "My content")
+        self.assertEqual(len(cast(Any, response.data)), 1)
+        self.assertEqual(cast(Any, response.data)[0]["content"], "My content")
 
     def test_agent_can_sync_pending_directives(self):
         # Issue a directive
@@ -68,8 +70,8 @@ class AgentDirectiveTests(APITestCase):
         response = self.client.get(self.sync_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["content"], "Test task")
+        self.assertEqual(len(cast(Any, response.data)), 1)
+        self.assertEqual(cast(Any, response.data)[0]["content"], "Test task")
 
     def test_agent_can_sync_broadcast_directives(self):
         # Broadcast directive (agent is null)
@@ -81,8 +83,8 @@ class AgentDirectiveTests(APITestCase):
         response = self.client.get(self.sync_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["content"], "Global broadcast")
+        self.assertEqual(len(cast(Any, response.data)), 1)
+        self.assertEqual(cast(Any, response.data)[0]["content"], "Global broadcast")
 
     def test_agent_can_update_directive_status(self):
         directive = AgentDirective.objects.create(

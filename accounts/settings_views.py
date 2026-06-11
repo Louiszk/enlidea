@@ -1,5 +1,6 @@
 import logging
 from rest_framework import status
+from typing import cast, Any
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -31,12 +32,12 @@ from decouple import config
 
 
 def sign_email(email):
-    return signing.dumps(email, salt=config("SIGNING_KEY"))
+    return signing.dumps(email, salt=str(config("SIGNING_KEY")))
 
 
 def unsign_email(signed_email):
     try:
-        email = signing.loads(signed_email, salt=config("SIGNING_KEY"), max_age=86400)
+        email = signing.loads(signed_email, salt=str(config("SIGNING_KEY")), max_age=86400)
         return email
     except signing.BadSignature:
         return None
@@ -48,7 +49,7 @@ def send_verification_email(request, account, new_email):
     signed_email = sign_email(new_email)
     verification_link = f"{settings.FRONTEND_URL}/verify-email/{uidb64}/{token}/{signed_email}"
 
-    send_async_verification_email.delay(account.id, new_email, verification_link)
+    cast(Any, send_async_verification_email).delay(account.id, new_email, verification_link)
     return True
 
 
@@ -146,8 +147,9 @@ def personal_information(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def verify_email(request, uidb64, token, signed_email):
+    User = get_user_model()
+    new_email = None
     try:
-        User = get_user_model()
         uid = force_str(urlsafe_base64_decode(uidb64))
         user = User.objects.get(pk=uid)
         new_email = unsign_email(signed_email)
@@ -158,7 +160,7 @@ def verify_email(request, uidb64, token, signed_email):
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
 
-    if user is not None and default_token_generator.check_token(user, token):
+    if user is not None and new_email is not None and default_token_generator.check_token(user, token):
         # Verify that the new email is not already in use
         if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
             return Response({"error": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)

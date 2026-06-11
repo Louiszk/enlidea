@@ -64,7 +64,7 @@ class TaskTriggersTest(EnlideaBaseTestCase):
             # Now it must be in_progress, should trigger deadline
             node.refresh_from_db()
             self.assertEqual(node.status, "in_progress")
-            mock_apply_async.assert_called_once_with(args=[node.id], eta=node.deadline)
+            mock_apply_async.assert_called_once_with(args=(node.id,), eta=node.deadline)
 
     @patch("main_api.tasks.task_matchmake_node.delay")
     def test_finalize_triggers_matchmake_task(self, mock_delay):

@@ -1,3 +1,4 @@
+from typing import cast, Any
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
@@ -35,9 +36,9 @@ class SyncEndpointTest(APITestCase):
 
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["agent_meta"]["name"], "Test Agent")
-        self.assertEqual(len(response.data["directives"]), 1)
-        self.assertTrue(response.data["timestamp"] > 0)
+        self.assertEqual(cast(Any, response.data)["agent_meta"]["name"], "Test Agent")
+        self.assertEqual(len(cast(Any, response.data)["directives"]), 1)
+        self.assertTrue(cast(Any, response.data)["timestamp"] > 0)
 
     def test_sync_304_when_up_to_date(self):
         # Create initial state
@@ -46,7 +47,7 @@ class SyncEndpointTest(APITestCase):
         )
 
         response = self.client.get(self.url)
-        timestamp = response.data["timestamp"]
+        timestamp = cast(Any, response.data)["timestamp"]
 
         # Sync with current timestamp -> 304
         response = self.client.get(self.url, {"since_timestamp": timestamp})
@@ -59,8 +60,8 @@ class SyncEndpointTest(APITestCase):
         )
 
         response = self.client.get(self.url)
-        ts1 = response.data["timestamp"]
-        self.assertEqual(len(response.data["directives"]), 1)
+        ts1 = cast(Any, response.data)["timestamp"]
+        self.assertEqual(len(cast(Any, response.data)["directives"]), 1)
 
         # Small delay to ensure timestamp difference
         time.sleep(0.1)
@@ -71,8 +72,8 @@ class SyncEndpointTest(APITestCase):
         # 3. Sync with old timestamp -> 200 with BOTH directives (State-Based)
         response = self.client.get(self.url, {"since_timestamp": ts1})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data["directives"]), 2)
-        self.assertTrue(response.data["timestamp"] > ts1)
+        self.assertEqual(len(cast(Any, response.data)["directives"]), 2)
+        self.assertTrue(cast(Any, response.data)["timestamp"] > ts1)
 
     def test_sync_state_recovery_after_crash(self):
         # Simulate state with multiple objects
@@ -81,7 +82,7 @@ class SyncEndpointTest(APITestCase):
         node.assigned_agents.add(self.agent)
 
         response = self.client.get(self.url)
-        ts_initial = response.data["timestamp"]
+        ts_initial = cast(Any, response.data)["timestamp"]
 
         # New activity
         time.sleep(0.1)
@@ -91,8 +92,8 @@ class SyncEndpointTest(APITestCase):
         response = self.client.get(self.url, {"since_timestamp": ts_initial})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # It gets everything back, not just the new directive
-        self.assertEqual(len(response.data["assignments"]), 1)
-        self.assertEqual(len(response.data["directives"]), 1)
+        self.assertEqual(len(cast(Any, response.data)["assignments"]), 1)
+        self.assertEqual(len(cast(Any, response.data)["directives"]), 1)
 
     def test_sync_200_when_state_shrinks(self):
         # 1. Initial state with a task
@@ -100,8 +101,8 @@ class SyncEndpointTest(APITestCase):
             maintainer=self.maintainer, agent=self.agent, content="Temp Task", status="pending"
         )
         response = self.client.get(self.url)
-        ts_with_task = response.data["timestamp"]
-        self.assertEqual(len(response.data["directives"]), 1)
+        ts_with_task = cast(Any, response.data)["timestamp"]
+        self.assertEqual(len(cast(Any, response.data)["directives"]), 1)
 
         # 2. State Shrinkage: Task is deleted/completed
         directive.delete()
@@ -109,5 +110,5 @@ class SyncEndpointTest(APITestCase):
         # 3. Sync with old timestamp -> 200 OK (because ts_with_task != current 0)
         response = self.client.get(self.url, {"since_timestamp": ts_with_task})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data["directives"]), 0)
-        self.assertEqual(response.data["timestamp"], 0)
+        self.assertEqual(len(cast(Any, response.data)["directives"]), 0)
+        self.assertEqual(cast(Any, response.data)["timestamp"], 0)

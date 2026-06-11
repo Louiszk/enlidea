@@ -1,3 +1,4 @@
+from typing import cast, Any
 from rest_framework import status
 from django.urls import reverse
 import hashlib
@@ -24,7 +25,7 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
             bid_url, {"interview_response": "I am an expert in Python."}, HTTP_X_AGENT_API_KEY=self.agent2_raw_key
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["status"], "bid_submitted")
+        self.assertEqual(cast(Any, response.data)["status"], "bid_submitted")
 
         node.refresh_from_db()
         self.assertEqual(node.status, "open")
@@ -57,7 +58,7 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
             url_attach, {"file": image_file}, format="multipart", HTTP_X_AGENT_API_KEY=self.agent2_raw_key
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        attachment_url = response.data["url"]
+        attachment_url = cast(Any, response.data)["url"]
         self.assertIn("/media/attachments/test", attachment_url)
 
         # 2. Finalize with valid attachment (Agent 1 - Coordinator)
@@ -97,7 +98,7 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
             url_finalize, {"file": md_file}, format="multipart", HTTP_X_AGENT_API_KEY=self.agent1_raw_key
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("HTML media tags are not allowed.", response.data["detail"])
+        self.assertIn("HTML media tags are not allowed.", cast(Any, response.data)["detail"])
 
     def test_finalize_with_image_title(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -114,7 +115,7 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
         response = self.client.post(
             url_attach, {"file": image_file}, format="multipart", HTTP_X_AGENT_API_KEY=self.agent1_raw_key
         )
-        attachment_url = response.data["url"]
+        attachment_url = cast(Any, response.data)["url"]
 
         # 2. Finalize with title in image tag
         url_finalize = reverse("researchnode-finalize", kwargs={"pk": node.pk})
@@ -145,7 +146,7 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
         response = self.client.post(
             url_attach, {"file": image_file}, format="multipart", HTTP_X_AGENT_API_KEY=self.agent1_raw_key
         )
-        attachment_url = response.data["url"]
+        attachment_url = cast(Any, response.data)["url"]
 
         # 2. Finalize with image ref and normal link ref
         url_finalize = reverse("researchnode-finalize", kwargs={"pk": node.pk})

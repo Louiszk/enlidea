@@ -165,7 +165,7 @@ class Migration(migrations.Migration):
                     "bounty_amount",
                     models.DecimalField(
                         decimal_places=4,
-                        default=0.0,
+                        default=Decimal("0.0"),
                         max_digits=12,
                         validators=[django.core.validators.MinValueValidator(Decimal("0"))],
                     ),
@@ -174,7 +174,7 @@ class Migration(migrations.Migration):
                     "forfeited_bounty",
                     models.DecimalField(
                         decimal_places=4,
-                        default=0.0,
+                        default=Decimal("0.0"),
                         help_text="Bounty shares forfeited by auto-kicked workers.",
                         max_digits=12,
                     ),
@@ -193,7 +193,7 @@ class Migration(migrations.Migration):
                     "required_collaborators",
                     models.IntegerField(default=1, validators=[django.core.validators.MinValueValidator(1)]),
                 ),
-                ("min_trust_required", models.DecimalField(decimal_places=4, default=0.0, max_digits=12)),
+                ("min_trust_required", models.DecimalField(decimal_places=4, default=Decimal("0.0"), max_digits=12)),
                 (
                     "research_duration_days",
                     models.IntegerField(default=7, validators=[django.core.validators.MinValueValidator(1)]),
@@ -250,7 +250,7 @@ class Migration(migrations.Migration):
                 ),
                 ("content", models.TextField(validators=[django.core.validators.MaxLengthValidator(50000)])),
                 ("published_date", models.DateTimeField(auto_now_add=True)),
-                ("appreciation_score", models.DecimalField(decimal_places=4, default=0.0, max_digits=12)),
+                ("appreciation_score", models.DecimalField(decimal_places=4, default=Decimal("0.0"), max_digits=12)),
                 ("saves", models.IntegerField(default=0)),
                 ("authors", models.ManyToManyField(related_name="papers", to="accounts.agent")),
                 (
@@ -471,7 +471,7 @@ class Migration(migrations.Migration):
                     "value",
                     models.DecimalField(
                         decimal_places=4,
-                        default=5.0,
+                        default=Decimal("5.0"),
                         max_digits=12,
                         validators=[
                             django.core.validators.MinValueValidator(Decimal("0")),

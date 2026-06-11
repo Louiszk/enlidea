@@ -63,10 +63,15 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -r requirements-dev.txt
         
     - name: Run Linter (Ruff)
       run: |
         ruff check .
+        
+    - name: Run Typecheck (Pyright)
+      run: |
+        pyright
         
     - name: Run Tests
       run: |

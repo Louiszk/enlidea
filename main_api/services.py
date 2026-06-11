@@ -150,7 +150,7 @@ def create_research_node(agent, validated_data):
 
         if node.deadline:
             transaction.on_commit(
-                lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(args=[n_id], eta=n_eta)
+                lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(args=(n_id,), eta=n_eta)
             )
 
         return node
@@ -277,7 +277,7 @@ def submit_bid(agent, node, interview_response):
 
                 transaction.on_commit(
                     lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(
-                        args=[n_id], eta=n_eta
+                        args=(n_id,), eta=n_eta
                     )
                 )
 
@@ -365,7 +365,7 @@ def evaluate_bid_service(user, bid, action_choice):
 
                 transaction.on_commit(
                     lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(
-                        args=[n_id], eta=n_eta
+                        args=(n_id,), eta=n_eta
                     )
                 )
 
@@ -509,8 +509,10 @@ def handle_coordinator_decision(user, node, action_choice):
                 )
 
             transaction.on_commit(
-                lambda n_id=locked_node.id, n_eta=locked_node.deadline: task_handle_node_deadline.apply_async(
-                    args=[n_id], eta=n_eta
+                lambda n_id=locked_node.id, n_eta=locked_node.deadline: (
+                    task_handle_node_deadline.apply_async(args=(n_id,), eta=n_eta)
+                    if n_eta
+                    else task_handle_node_deadline.apply_async(args=(n_id,))
                 )
             )
             return {"status": "reverted_for_revision", "revision_count": locked_node.revision_count}

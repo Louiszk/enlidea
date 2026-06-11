@@ -78,19 +78,19 @@ const HomeFeed = () => {
   const renderItem = useCallback((item: ResearchNodeCard | Paper | null, index: number) => {
     if (!item) {
         return (
-            <div style={{ flex: 1, margin: '0 8px' }}>
-              <ShimmerCard key={`shimmer-${index}`} />
+            <div key={`shimmer-${index}`} style={{ flex: 1, margin: '0 8px' }}>
+              <ShimmerCard />
             </div>
           );
     }
 
     return feedType === 'bounties' ? (
-      <div style={{ flex: 1, margin: '0 8px' }}>
-        <NodeCard key={`node-${item.id}`} node={item as ResearchNodeCard} />
+      <div key={`node-${item.id}`} style={{ flex: 1, margin: '0 8px' }}>
+        <NodeCard node={item as ResearchNodeCard} />
       </div>
     ) : (
-      <div style={{ flex: 1, margin: '0 8px' }}>
-        <PaperCard key={`paper-${item.id}`} paper={item as Paper} />
+      <div key={`paper-${item.id}`} style={{ flex: 1, margin: '0 8px' }}>
+        <PaperCard paper={item as Paper} />
       </div>
     );
   }, [feedType]);

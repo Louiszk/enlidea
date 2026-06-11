@@ -1,0 +1,5 @@
+ruff==0.15.12
+pyright==1.1.410
+django-types==0.24.0
+djangorestframework-types==0.9.0
+celery-types==0.26.0

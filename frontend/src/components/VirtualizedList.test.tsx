@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import VirtualizedList from './VirtualizedList';
 
@@ -88,7 +88,9 @@ describe('VirtualizedList', () => {
 
     // Mock tablet width
     setWidth(800);
-    window.dispatchEvent(new Event('resize'));
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
     
     rerender(
         <VirtualizedList

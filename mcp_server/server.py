@@ -1,3 +1,4 @@
+from typing import Optional
 import contextvars
 import os
 from contextlib import asynccontextmanager
@@ -8,7 +9,7 @@ from starlette.responses import JSONResponse
 from functools import wraps
 
 # Context variable for the API key
-agent_api_key = contextvars.ContextVar("agent_api_key", default=None)
+agent_api_key: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("agent_api_key", default=None)
 
 # Infrastructure URLs
 BACKEND_BASE_URL = os.getenv("ENLIDEA_BACKEND_URL", "http://backend:8000")
@@ -68,6 +69,9 @@ async def make_request(method: str, endpoint: str, **kwargs):
     headers["Accept"] = "application/json"
     if key:
         headers["X-AGENT-API-KEY"] = key
+
+    if not http_client:
+        raise RuntimeError("HTTP Client not initialized")
 
     response = await http_client.request(method, endpoint.lstrip("/"), headers=headers, **kwargs)
 
@@ -177,12 +181,12 @@ async def create_research_node(
     body: str,
     required_capabilities: list[int],
     bounty_amount: int,
-    node_type: str = None,
+    node_type: str | None = None,
     required_reviews: int = 3,
     required_collaborators: int = 1,
     min_trust_required: int = 0,
     research_duration_days: int = 7,
-    keywords: list[str] = None,
+    keywords: list[str] | None = None,
     interview_prompt: str = "",
 ) -> str:
     """
@@ -218,16 +222,16 @@ async def create_research_node(
 @require_elevated_agent
 async def edit_research_node(
     node_id: int,
-    title: str = None,
-    description: str = None,
-    body: str = None,
-    required_capabilities: list[int] = None,
-    node_type: str = None,
-    required_reviews: int = None,
-    required_collaborators: int = None,
-    min_trust_required: int = None,
-    keywords: list[str] = None,
-    interview_prompt: str = None,
+    title: str | None = None,
+    description: str | None = None,
+    body: str | None = None,
+    required_capabilities: list[int] | None = None,
+    node_type: str | None = None,
+    required_reviews: int | None = None,
+    required_collaborators: int | None = None,
+    min_trust_required: int | None = None,
+    keywords: list[str] | None = None,
+    interview_prompt: str | None = None,
 ) -> str:
     """
     Edit an existing research node.
@@ -273,7 +277,7 @@ async def delete_research_node(node_id: int) -> str:
 
 @mcp.tool()
 @require_elevated_agent
-async def execute_directive(directive_id: int, status: str, agent_response: str = None) -> str:
+async def execute_directive(directive_id: int, status: str, agent_response: str | None = None) -> str:
     """Execute a specific directive."""
     payload = {"id": directive_id, "status": status}
     if agent_response:
@@ -305,7 +309,7 @@ async def submit_peer_review(
     recommendation: str,
     detailed_comments: str,
     is_approved: bool,
-    structured_data: dict = None,
+    structured_data: dict | None = None,
 ) -> str:
     """
     Submit a peer review.
@@ -357,7 +361,7 @@ async def upload_attachment(node_id: int, file_url: str) -> str:
 
 @mcp.tool()
 @require_elevated_agent
-async def finalize_research(node_id: int, markdown_body: str = None, file_url: str = None) -> str:
+async def finalize_research(node_id: int, markdown_body: str | None = None, file_url: str | None = None) -> str:
     """
     Finalize the research by submitting the markdown document.
     Must include references to uploaded attachments if images are used.
@@ -418,7 +422,7 @@ async def submit_coordinator_decision(node_id: int, action: str) -> str:
 
 @mcp.tool()
 @require_elevated_agent
-async def get_node_feedback(node_id: int, round_number: int = None) -> str:
+async def get_node_feedback(node_id: int, round_number: int | None = None) -> str:
     """
     Retrieve peer review feedback from previous rounds.
     Only accessible to assigned agents and the coordinator.
@@ -433,7 +437,9 @@ async def get_node_feedback(node_id: int, round_number: int = None) -> str:
 
 @mcp.tool()
 @require_elevated_agent
-async def submit_report(target_type: str, target_id: int, reason: str, description: str, node_id: int = None) -> str:
+async def submit_report(
+    target_type: str, target_id: int, reason: str, description: str, node_id: int | None = None
+) -> str:
     """
     Submit a formal report against a node, agent, or account.
     target_type: 'node', 'agent', or 'account'.
@@ -451,7 +457,7 @@ async def submit_report(target_type: str, target_id: int, reason: str, descripti
 
 @mcp.tool()
 @require_elevated_agent
-async def get_node_messages(node_id: int, since_timestamp: float = None) -> str:
+async def get_node_messages(node_id: int, since_timestamp: float | None = None) -> str:
     """
     Retrieve workspace messages for a research node.
     Only accessible to assigned agents and the coordinator.

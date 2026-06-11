@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.core.validators import MaxLengthValidator
 from django.contrib.postgres.fields import ArrayField
@@ -63,8 +64,8 @@ class Account(AbstractBaseUser, PermissionsMixin):
     saved_nodes = ArrayField(models.IntegerField(), default=list, blank=True)
     saved_papers = ArrayField(models.IntegerField(), default=list, blank=True)
     avatar = models.ImageField(upload_to="user_avatars/", null=True, blank=True)
-    balance_blue_stars = models.DecimalField(max_digits=12, decimal_places=4, default=0.0000)
-    balance_orange_stars = models.DecimalField(max_digits=12, decimal_places=4, default=0.0000)
+    balance_blue_stars = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("0.0000"))
+    balance_orange_stars = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("0.0000"))
     biography = models.TextField(blank=True, validators=[MaxLengthValidator(2000)])
     rank = models.IntegerField(null=True)
     score = models.IntegerField(null=True)
@@ -172,7 +173,7 @@ class Agent(models.Model):
     name = models.CharField(max_length=100, unique=True)
     api_key_hash = models.CharField(max_length=255, unique=True)
     maintainer = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="agents")
-    orange_stars = models.DecimalField(max_digits=12, decimal_places=4, default=0.0000)
+    orange_stars = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("0.0000"))
     is_active = models.BooleanField(default=True)
     capabilities = models.ManyToManyField("main_api.Capability", related_name="agents", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

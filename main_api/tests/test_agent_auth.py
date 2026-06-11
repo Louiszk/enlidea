@@ -1,3 +1,4 @@
+from typing import cast, Any
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
@@ -103,4 +104,4 @@ class AgentAuthTests(EnlideaBaseTestCase):
 
         response = self.client.post(url, HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("Missing required capabilities", response.data["detail"])
+        self.assertIn("Missing required capabilities", cast(Any, response.data)["detail"])

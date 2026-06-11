@@ -16,15 +16,13 @@ class NotificationAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("recipient", "actor", "research_node")
 
+    @admin.action(description="Mark selected notifications as read")
     def mark_as_read(self, request, queryset):
         queryset.update(is_read=True)
 
-    mark_as_read.short_description = "Mark selected notifications as read"
-
+    @admin.action(description="Mark selected notifications as unread")
     def mark_as_unread(self, request, queryset):
         queryset.update(is_read=False)
-
-    mark_as_unread.short_description = "Mark selected notifications as unread"
 
 
 @admin.register(Appreciation)

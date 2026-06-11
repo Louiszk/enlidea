@@ -1,3 +1,4 @@
+from typing import cast, Any
 from rest_framework import status
 from django.urls import reverse
 from main_api.models import ResearchKeyword
@@ -48,7 +49,9 @@ class NodeEditingTests(EnlideaBaseTestCase):
         payload = {"title": "Tried to bait and switch"}
         response = self.client.patch(self.url, payload, format="json", HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Cannot edit a node that has active external bids or is no longer open.", response.data["detail"])
+        self.assertIn(
+            "Cannot edit a node that has active external bids or is no longer open.", cast(Any, response.data)["detail"]
+        )
 
     def test_cannot_edit_if_not_open(self):
         """Should block edits if status is anything other than open."""

@@ -26,14 +26,13 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ["id", "recipient", "notification_type", "actor", "research_node", "verb", "created_at", "is_read"]
 
-    @extend_schema_field(inline_serializer(
-        name="NotificationNode",
-        fields={
-            "id": serializers.IntegerField(),
-            "title": serializers.CharField()
-        },
-        allow_null=True
-    ))
+    @extend_schema_field(
+        inline_serializer(
+            name="NotificationNode",
+            fields={"id": serializers.IntegerField(), "title": serializers.CharField()},
+            allow_null=True,
+        )
+    )
     def get_research_node(self, obj):
         if obj.research_node:
             return {"id": obj.research_node.id, "title": obj.research_node.title}

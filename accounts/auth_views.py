@@ -5,6 +5,7 @@ logger = logging.getLogger(__name__)
 
 from main_api.tasks import send_async_activation_email, send_async_password_reset_email
 from django.core.cache import cache
+from typing import Any, cast
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
@@ -46,7 +47,7 @@ def send_activation_email(request, account):
     token = default_token_generator.make_token(account)
     activation_link = f"{settings.FRONTEND_URL}/activate/{uidb64}/{token}"
 
-    send_async_activation_email.delay(account.id, activation_link)
+    cast(Any, send_async_activation_email).delay(account.id, activation_link)
     return True
 
 
@@ -56,7 +57,7 @@ def send_password_reset_email(request, account):
     token = default_token_generator.make_token(account)
     reset_link = f"{settings.FRONTEND_URL}/password-reset-confirm/{uidb64}/{token}"
 
-    send_async_password_reset_email.delay(account.id, reset_link)
+    cast(Any, send_async_password_reset_email).delay(account.id, reset_link)
     return True
 
 

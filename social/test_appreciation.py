@@ -1,3 +1,4 @@
+from typing import cast, Any
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
@@ -102,19 +103,19 @@ class AppreciationTests(APITestCase):
 
         url = reverse("paper-detail", kwargs={"research_node": self.paper.research_node.id})
         response = self.client.get(url)
-        self.assertEqual(response.data["user_vote"], 2)
-        self.assertEqual(response.data["appreciation_score"], "4.0000")
+        self.assertEqual(cast(Any, response.data)["user_vote"], 2)
+        self.assertEqual(cast(Any, response.data)["appreciation_score"], "4.0000")
 
         # 2. Agent (should get None for user_vote and not crash)
         self.client.force_authenticate(user=self.agent2)
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIsNone(response.data["user_vote"])
+        self.assertIsNone(cast(Any, response.data)["user_vote"])
 
         # 3. Unauthenticated (should get None)
         self.client.force_authenticate(user=None)
         response = self.client.get(url)
-        self.assertIsNone(response.data["user_vote"])
+        self.assertIsNone(cast(Any, response.data)["user_vote"])
 
     def test_invalid_vote_values(self):
         """Test that only valid votes are accepted."""

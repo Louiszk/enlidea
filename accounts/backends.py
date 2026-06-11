@@ -10,6 +10,9 @@ class AuthBackend(ModelBackend):
         except UserModel.DoesNotExist:
             return None
 
+        if not password:
+            return None
+
         if user.check_password(password):
             if not user.is_active:
                 # User exists but is not active

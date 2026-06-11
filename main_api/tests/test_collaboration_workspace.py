@@ -1,3 +1,4 @@
+from typing import cast, Any
 from django.test import TestCase, Client
 from django.urls import reverse
 from rest_framework import status
@@ -49,9 +50,9 @@ class CollaborationWorkspaceTests(TestCase):
 
         response = api_client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["content"], "Hello team!")
-        self.assertEqual(response.data[0]["sender_name"], "Coordinator")
+        self.assertEqual(len(cast(Any, response.data)), 1)
+        self.assertEqual(cast(Any, response.data)[0]["content"], "Hello team!")
+        self.assertEqual(cast(Any, response.data)[0]["sender_name"], "Coordinator")
 
     def test_post_message_assigned_agent(self):
         from rest_framework.test import APIClient
@@ -97,8 +98,8 @@ class CollaborationWorkspaceTests(TestCase):
 
         response = api_client.get(url, {"since_timestamp": ts})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["content"], "New message")
+        self.assertEqual(len(cast(Any, response.data)), 1)
+        self.assertEqual(cast(Any, response.data)[0]["content"], "New message")
 
     def test_patch_plan_coordinator_only(self):
         from rest_framework.test import APIClient
@@ -132,7 +133,7 @@ class CollaborationWorkspaceTests(TestCase):
         # Initial sync
         response = api_client.get(url_sync)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ts1 = response.data["timestamp"]
+        ts1 = cast(Any, response.data)["timestamp"]
 
         # New message posted by coordinator
         time.sleep(0.1)
@@ -141,7 +142,7 @@ class CollaborationWorkspaceTests(TestCase):
         # Second sync
         response = api_client.get(url_sync)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ts2 = response.data["timestamp"]
+        ts2 = cast(Any, response.data)["timestamp"]
 
         self.assertGreater(ts2, ts1)
 
@@ -163,6 +164,8 @@ class CollaborationWorkspaceTests(TestCase):
         self.maintainer.refresh_from_db()
 
         # Verify 3 days extension (72 hours)
+        assert self.node.deadline is not None
+        assert initial_deadline is not None
         self.assertAlmostEqual((self.node.deadline - initial_deadline).total_seconds(), 3 * 86400, places=1)
         self.assertEqual(self.node.extended_days, 3)
 
@@ -198,7 +201,7 @@ class CollaborationWorkspaceTests(TestCase):
         api_client.force_authenticate(user=self.worker)
         response = api_client.post(url, {"content": "Interrupting..."})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("You must fetch the latest messages", response.data["detail"])
+        self.assertIn("You must fetch the latest messages", cast(Any, response.data)["detail"])
 
         # 4. Worker reads messages
         response = api_client.get(url)
@@ -244,7 +247,7 @@ class CollaborationWorkspaceTests(TestCase):
 
         response = api_client.post(url, {"days": 15})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Maximum allowed total extension is 14 days", response.data["detail"])
+        self.assertIn("Maximum allowed total extension is 14 days", cast(Any, response.data)["detail"])
 
     def test_extend_deadline_unauthorized(self):
         from rest_framework.test import APIClient
@@ -255,4 +258,6 @@ class CollaborationWorkspaceTests(TestCase):
 
         response = api_client.post(url, {"days": 2})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["detail"], "Only assigned workers or the coordinator can extend the deadline.")
+        self.assertEqual(
+            cast(Any, response.data)["detail"], "Only assigned workers or the coordinator can extend the deadline."
+        )

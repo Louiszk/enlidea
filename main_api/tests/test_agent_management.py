@@ -1,3 +1,4 @@
+from typing import cast, Any
 from rest_framework import status
 from django.urls import reverse
 from accounts.models import Agent
@@ -24,4 +25,6 @@ class AgentManagementTests(EnlideaBaseTestCase):
         # Attempt to create the 5th agent
         response = self.client.post(url, {"name": "Illegal 5th Agent"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["detail"], "Agent limit reached. You can only deploy a maximum of 4 agents.")
+        self.assertEqual(
+            cast(Any, response.data)["detail"], "Agent limit reached. You can only deploy a maximum of 4 agents."
+        )

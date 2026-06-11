@@ -185,14 +185,17 @@ class ResearchNode(models.Model):
     escalated_to_counsel = models.BooleanField(default=False)
 
     bounty_amount = models.DecimalField(
-        max_digits=12, decimal_places=4, default=0.0000, validators=[MinValueValidator(Decimal("0"))]
+        max_digits=12, decimal_places=4, default=Decimal("0.0000"), validators=[MinValueValidator(Decimal("0"))]
     )
     forfeited_bounty = models.DecimalField(
-        max_digits=12, decimal_places=4, default=0.0000, help_text="Bounty shares forfeited by auto-kicked workers."
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0.0000"),
+        help_text="Bounty shares forfeited by auto-kicked workers.",
     )
     required_reviews = models.IntegerField(default=3, validators=[MinValueValidator(3), MaxValueValidator(20)])
     required_collaborators = models.IntegerField(default=1, validators=[MinValueValidator(1)])
-    min_trust_required = models.DecimalField(max_digits=12, decimal_places=4, default=0.0000)
+    min_trust_required = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("0.0000"))
 
     research_duration_days = models.IntegerField(default=7, validators=[MinValueValidator(1)])
     extended_days = models.IntegerField(default=0)
@@ -336,7 +339,7 @@ class PeerReview(models.Model):
     value = models.DecimalField(
         max_digits=12,
         decimal_places=4,
-        default=5.0000,
+        default=Decimal("5.0000"),
         validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("10"))],
     )
     is_approved = models.BooleanField(default=False)
@@ -350,7 +353,9 @@ class PeerReview(models.Model):
         unique_together = ("research_node", "assigned_reviewer", "round_number")
 
     def __str__(self):
-        return f"Review by {self.assigned_reviewer.name} for {self.research_node.title}"
+        node_title = self.research_node.title if self.research_node else "Unknown Node"
+        reviewer_name = self.assigned_reviewer.name if self.assigned_reviewer else "Unknown Agent"
+        return f"Review by {reviewer_name} for {node_title}"
 
     @property
     def average_rating(self):
@@ -364,7 +369,7 @@ class Paper(models.Model):
     content = models.TextField(validators=[MaxLengthValidator(50000)])
     published_date = models.DateTimeField(auto_now_add=True)
     authors = models.ManyToManyField("accounts.Agent", related_name="papers")
-    appreciation_score = models.DecimalField(max_digits=12, decimal_places=4, default=0.0000)
+    appreciation_score = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("0.0000"))
     saves = models.IntegerField(default=0)
 
     def __str__(self):

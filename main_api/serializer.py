@@ -98,14 +98,18 @@ class UserSerializer(serializers.ModelSerializer):
     def get_joined_date(self, obj):
         return localtime(obj.date_joined).strftime("%B %Y")
 
-    @extend_schema_field(serializers.ListField(child=inline_serializer(
-        name="ActiveAgent",
-        fields={
-            "id": serializers.IntegerField(),
-            "name": serializers.CharField(),
-            "orange_stars": serializers.DecimalField(max_digits=12, decimal_places=4)
-        }
-    )))
+    @extend_schema_field(
+        serializers.ListField(
+            child=inline_serializer(
+                name="ActiveAgent",
+                fields={
+                    "id": serializers.IntegerField(),
+                    "name": serializers.CharField(),
+                    "orange_stars": serializers.DecimalField(max_digits=12, decimal_places=4),
+                },
+            )
+        )
+    )
     def get_active_agents(self, obj):
         agents = obj.agents.filter(is_active=True).order_by("-created_at")
         return [{"id": a.id, "name": a.name, "orange_stars": a.orange_stars} for a in agents]
@@ -147,11 +151,11 @@ class NodeTypeSerializer(serializers.ModelSerializer):
 
 
 class AgentListSerializer(serializers.ListSerializer):
-    def to_representation(self, data):
+    def to_representation(self, instance):
         from django.core.cache import cache
 
         # Force evaluation into a list once
-        iterable = list(data.all() if hasattr(data, "all") else data)
+        iterable = list(instance.all() if hasattr(instance, "all") else instance)
 
         # Bulk fetch cache for the evaluated list
         agent_ids = [agent.id for agent in iterable]
@@ -338,11 +342,13 @@ class ResearchNodeCardSerializer(serializers.ModelSerializer):
             "total_assigned",
         ]
 
-    @extend_schema_field(inline_serializer(
-        name="CardAgent",
-        fields={"name": serializers.CharField(), "id": serializers.IntegerField()},
-        allow_null=True
-    ))
+    @extend_schema_field(
+        inline_serializer(
+            name="CardAgent",
+            fields={"name": serializers.CharField(), "id": serializers.IntegerField()},
+            allow_null=True,
+        )
+    )
     def get_coordinating_agent(self, obj):
         return (
             {"name": obj.coordinating_agent.name, "id": obj.coordinating_agent.id} if obj.coordinating_agent else None
@@ -612,16 +618,16 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError("Keyword must be under 100 characters.")
         return value
 
-    def validate(self, data):
+    def validate(self, attrs):
         # Reviewer cap validation
-        required_reviews = data.get("required_reviews")
+        required_reviews = attrs.get("required_reviews")
         if required_reviews:
             if required_reviews < 3:
                 raise serializers.ValidationError({"required_reviews": "Minimum of 3 peer reviews required."})
             if required_reviews > 20:
                 raise serializers.ValidationError({"required_reviews": "Maximum of 20 peer reviews allowed."})
 
-        return data
+        return attrs
 
     def create(self, validated_data):
         keywords_data = validated_data.pop("keywords", [])
@@ -644,7 +650,7 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
 
         if node.deadline:
             transaction.on_commit(
-                lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(args=[n_id], eta=n_eta)
+                lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(args=(n_id,), eta=n_eta)
             )
 
         return node
@@ -719,26 +725,26 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError("Keyword must be under 100 characters.")
         return value
 
-    def validate(self, data):
+    def validate(self, attrs):
         # Capability validation
-        if "required_capabilities" in data:
-            if not data["required_capabilities"]:
+        if "required_capabilities" in attrs:
+            if not attrs["required_capabilities"]:
                 raise serializers.ValidationError({"required_capabilities": "At least one capability is required."})
 
         # Integer enforcement for trust
-        min_trust = data.get("min_trust_required")
+        min_trust = attrs.get("min_trust_required")
         if min_trust is not None and min_trust % 1 != 0:
             raise serializers.ValidationError({"min_trust_required": "Minimum trust required must be a whole number."})
 
         # Reviewer cap validation
-        required_reviews = data.get("required_reviews")
+        required_reviews = attrs.get("required_reviews")
         if required_reviews:
             if required_reviews < 3:
                 raise serializers.ValidationError({"required_reviews": "Minimum of 3 peer reviews required."})
             if required_reviews > 20:
                 raise serializers.ValidationError({"required_reviews": "Maximum of 20 peer reviews allowed."})
 
-        return data
+        return attrs
 
     def update(self, instance, validated_data):
         keywords_data = validated_data.pop("keywords", None)
@@ -788,11 +794,13 @@ class AgentSyncNodeSerializer(serializers.ModelSerializer):
             "coordination_plan",
         ]
 
-    @extend_schema_field(inline_serializer(
-        name="SyncNodeAgent",
-        fields={"name": serializers.CharField(), "id": serializers.IntegerField()},
-        allow_null=True
-    ))
+    @extend_schema_field(
+        inline_serializer(
+            name="SyncNodeAgent",
+            fields={"name": serializers.CharField(), "id": serializers.IntegerField()},
+            allow_null=True,
+        )
+    )
     def get_coordinating_agent(self, obj):
         return (
             {"name": obj.coordinating_agent.name, "id": obj.coordinating_agent.id} if obj.coordinating_agent else None

@@ -13,7 +13,7 @@ import ViewFullRating from '../components/ViewFullRating';
 import Modal from '../components/Modal';
 import { ReportButton, ReportForm } from '../components/Report';
 import { getMediaUrl } from '../services/apiClient';
-import { Account as ApiUser, ActiveAgent, TargetTypeEnum } from '../api/generated/api';
+import { ActiveAgent, TargetTypeEnum } from '../api/generated/api';
 import { UserProfile } from '../types';
 
 const User = () => {

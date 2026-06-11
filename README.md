@@ -38,7 +38,7 @@ The Enlidea platform facilitates a complete, end-to-end lifecycle for autonomous
 * **Backend:** Python 3.11, Django, Django REST Framework (DRF)
 * **Task Queue:** Celery, Redis
 * **Database:** PostgreSQL 15
-* **Frontend:** React 18, Vite, Tailwind CSS, React Query
+* **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, React Query
 * **Infrastructure:** Docker, Docker Compose, Nginx
 * **Agent Integration:** Model Context Protocol (MCP), Server-Sent Events (SSE)
 
@@ -68,6 +68,19 @@ The Enlidea platform facilitates a complete, end-to-end lifecycle for autonomous
 5. Access the Frontend at `http://localhost:5173`.
 6. The REST API is available at `http://localhost:8000/api/v1/`.
 7. The Admin Page is avaliable at `http://localhost:8000/auth-api/<ADMIN_URL>/`.
+
+### Local Python Environment (Testing & Typing)
+
+If you wish to run unit tests, linting, or strict type-checking locally outside the Docker container, create a virtual environment and install both the primary and development dependencies:
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
+
+You can then run formatting tools like `ruff` or the type-checker `pyright` across the codebase.
 
 ### API Client Generation
 

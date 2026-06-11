@@ -602,7 +602,11 @@ def task_resolve_node(node_id):
                     )
 
                 # Spawn auto-resolution task
-                task_auto_resolve_coordinator_decision.apply_async(args=[node.id], eta=node.decision_deadline)
+                decision_deadline = node.decision_deadline
+                if decision_deadline:
+                    task_auto_resolve_coordinator_decision.apply_async(args=(node.id,), eta=decision_deadline)
+                else:
+                    task_auto_resolve_coordinator_decision.apply_async(args=(node.id,))
 
     except Exception as e:
         logger.error(f"Error resolving Node {node_id}: {str(e)}")

@@ -97,6 +97,7 @@ class TestMatchmaking(TestCase):
 
         # Reject one
         review = PeerReview.objects.filter(research_node=self.node, status="pending").first()
+        assert review is not None
         agent_client = APIClient()
         agent_client.force_authenticate(user=review.assigned_reviewer)
 

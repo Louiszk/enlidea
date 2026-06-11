@@ -1,3 +1,4 @@
+from typing import cast, Any
 from rest_framework import viewsets, status, permissions, mixins, authentication, throttling
 from accounts.authentication import CookieJWTAuthentication
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes, authentication_classes
@@ -152,7 +153,7 @@ class SuggestionSerializer(serializers.Serializer):
 
 class SearchResultItemSerializer(serializers.Serializer):
     type = serializers.CharField()  # "users", "capabilities", "nodes", "papers"
-    data = serializers.ListField(child=serializers.DictField())
+    results = serializers.ListField(child=serializers.DictField())
     hasNext = serializers.BooleanField(required=False)
 
 
@@ -167,6 +168,7 @@ class ResearchNodePagination(PageNumberPagination):
     page_size = 9
 
     def get_paginated_response(self, data):
+        assert self.page is not None
         return Response(
             {"nodes": data, "total_pages": self.page.paginator.num_pages, "count": self.page.paginator.count}
         )
@@ -176,6 +178,7 @@ class PaperPagination(PageNumberPagination):
     page_size = 9
 
     def get_paginated_response(self, data):
+        assert self.page is not None
         return Response(
             {
                 "papers": data,
@@ -485,7 +488,12 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
             "extend_deadline",
         ]:
             self.throttle_scope = "agent_action"
-        elif self.action == "messages" and self.request and self.request.method.lower() == "post":
+        elif (
+            self.action == "messages"
+            and self.request
+            and isinstance(self.request.method, str)
+            and self.request.method.lower() == "post"
+        ):
             self.throttle_scope = "agent_action"
         else:
             self.throttle_scope = "agent_read"
@@ -569,7 +577,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 try:
                     cap = Capability.objects.get(slug=capability_slug)
                     path = cap.get_path()
-                    response.data["category_path"] = [{"title": c.title, "slug": c.slug} for c in path]
+                    cast(Any, response.data)["category_path"] = [{"title": c.title, "slug": c.slug} for c in path]
                 except Capability.DoesNotExist:
                     pass
             return response
@@ -594,10 +602,10 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            return [IsAgent(), IsNotPublicAgent()]
+            return cast(Any, [IsAgent(), IsNotPublicAgent()])
         if self.action in ["update", "partial_update", "destroy"]:
             # Allow both Agents and Maintainers through the front door
-            return [permissions.IsAuthenticated(), IsNotPublicAgent()]
+            return cast(Any, [permissions.IsAuthenticated(), IsNotPublicAgent()])
         if self.action in [
             "active",
             "bid",
@@ -608,8 +616,8 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
             "coordinator_decision",
             "extend_deadline",
         ]:
-            return [permissions.IsAuthenticated(), IsNotPublicAgent()]
-        return [permissions.AllowAny()]
+            return cast(Any, [permissions.IsAuthenticated(), IsNotPublicAgent()])
+        return cast(Any, [permissions.AllowAny()])
 
     def perform_create(self, serializer):
         serializer.instance = create_research_node(self.request.user, serializer.validated_data)
@@ -757,6 +765,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 serializer.is_valid(raise_exception=True)
                 serializer.save(sender=actor, node=node)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(status=405)
 
     @extend_schema(
         request=ResearchNodePlanSerializer,
@@ -1190,7 +1199,11 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
             # Replace/spawn deadline task. The old one will wake up, see the new deadline, and automatically delay itself to the new ETA.
             transaction.on_commit(
-                lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(args=[n_id], eta=n_eta)
+                lambda n_id=node.id, n_eta=node.deadline: (
+                    task_handle_node_deadline.apply_async(args=(n_id,), eta=n_eta)
+                    if n_eta
+                    else task_handle_node_deadline.apply_async(args=(n_id,))
+                )
             )
 
             # Audit trail
@@ -1313,6 +1326,7 @@ class PeerReviewViewSet(
                     logger.info(f"Quota met for Node {node.id}. Cleaned up pending offers.")
 
                 return Response({"status": "claimed"})
+        return Response(status=405)
 
     def perform_update(self, serializer):
         # When an agent updates a review, it means they have completed it.
@@ -1325,6 +1339,7 @@ class PeerReviewViewSet(
 
         with transaction.atomic():
             # 1. Lock the specific review
+            assert serializer.instance is not None
             locked_instance = PeerReview.objects.select_for_update().get(id=serializer.instance.id)
 
             # 2. Check status on the locked instance
@@ -1543,6 +1558,8 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
 
             return Response({"status": "updated"})
 
+        return Response({"detail": "Method not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
 
 # Legacy/Dashboard refactored views
 @extend_schema(
@@ -1591,11 +1608,9 @@ def request_public_key(request):
                 }
             )
         except IntegrityError:
-            if attempt == max_retries - 1:
-                return Response(
-                    {"detail": "System busy. Please try again later."}, status=status.HTTP_503_SERVICE_UNAVAILABLE
-                )
             continue
+
+    return Response({"detail": "System busy. Please try again later."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @extend_schema(responses=TrendingResponseSerializer)
@@ -1720,17 +1735,17 @@ def search_results(request):
     serializer_context = {"request": request}
 
     data = [
-        {"type": "users", "data": UserSerializer(users, many=True, context=serializer_context).data},
+        {"type": "users", "results": UserSerializer(users, many=True, context=serializer_context).data},
         {
             "type": "capabilities",
-            "data": CapabilitySearchSerializer(capabilities, many=True, context=serializer_context).data,
+            "results": CapabilitySearchSerializer(capabilities, many=True, context=serializer_context).data,
         },
         {
             "type": "nodes",
-            "data": ResearchNodeCardSerializer(nodes, many=True, context=serializer_context).data,
+            "results": ResearchNodeCardSerializer(nodes, many=True, context=serializer_context).data,
             "hasNext": False,
         },
-        {"type": "papers", "data": PaperSerializer(papers, many=True, context=serializer_context).data},
+        {"type": "papers", "results": PaperSerializer(papers, many=True, context=serializer_context).data},
     ]
 
     return Response(data)
