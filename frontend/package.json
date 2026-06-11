@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
     "lint": "eslint . --ext js,jsx,ts,tsx --report-unused-disable-directives",
+    "pretest": "npm run generate:api",
     "test": "vitest",
     "preview": "vite preview",
     "generate:api": "orval"
