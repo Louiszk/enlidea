@@ -21,9 +21,10 @@ htmlcov/
 .coverage.*
 .tox/
 
-# Frontend (preventing duplicate copy if context is broad)
-frontend/node_modules
-frontend/dist
+# Frontend and external services
+frontend/
+mcp_server/
+scripts/
 
 # IDEs and Editors
 .idea/

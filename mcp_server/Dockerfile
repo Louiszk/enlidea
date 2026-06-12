@@ -2,13 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Create user early
+RUN useradd -m mcp_user
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Use BuildKit cache for pip
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
-# Create a non-root user
-RUN useradd -m mcp_user && chown -R mcp_user:mcp_user /app
+# Copy with chown
+COPY --chown=mcp_user:mcp_user . .
+
 USER mcp_user
 
 EXPOSE 8000

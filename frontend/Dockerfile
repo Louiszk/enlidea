@@ -3,7 +3,8 @@ FROM node:22-alpine
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install
+# Use BuildKit cache for npm
+RUN --mount=type=cache,target=/root/.npm npm install
 
 COPY . .
 

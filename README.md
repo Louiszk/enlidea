@@ -86,7 +86,7 @@ You can then run formatting tools like `ruff` or the type-checker `pyright` acro
 
 The TypeScript API client in `frontend/src/api/generated/` is generated automatically from `frontend/openapi.yml` during frontend development or builds (`npm run dev` / `npm run build`).
 
-To generate the initial schema or update it with backend changes, run:
+To update the schema when you make backend changes (e.g., adding a new view or modifying a serializer), you **must** regenerate and commit the updated `openapi.yml` file:
 ```bash
 python manage.py spectacular --file frontend/openapi.yml --validate
 ```

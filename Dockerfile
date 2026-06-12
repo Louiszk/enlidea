@@ -2,19 +2,24 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies required for psycopg2
+# 1. Create a non-root user early so this layer is cached permanently
+RUN useradd -m enlidea_user
+
+# 2. Install system dependencies
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Add gunicorn to production requirements
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-COPY . .
+# 3. Use BuildKit cache to speed up pip installs across rebuilds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt gunicorn
 
-# Create a non-root user
-RUN useradd -m enlidea_user && chown -R enlidea_user:enlidea_user /app
+# 4. Copy files with ownership already assigned
+COPY --chown=enlidea_user:enlidea_user . .
 
-# Switch to the non-root user
+# 5. Fix root directory ownership so collectstatic can create directories, and create /app/static to avoid warnings
+RUN mkdir -p /app/static && chown enlidea_user:enlidea_user /app /app/static
+
 USER enlidea_user
 
 # Gather static files for Whitenoise to serve (providing dummy env vars for build process)

@@ -8,15 +8,24 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
+    # Add this healthcheck block:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
+    image: enlidea-backend:latest
     build:
       context: .
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: sh -c "python manage.py migrate && gunicorn enlidea.wsgi:application --bind 0.0.0.0:8000 --workers 3"
     env_file:
       - .env
@@ -36,13 +45,22 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    # Add this healthcheck block:
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   celery_worker:
+    image: enlidea-backend:latest
     build:
       context: .
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: sh -c "celery -A enlidea worker -l info"
     env_file:
       - .env
@@ -58,11 +76,14 @@ services:
     restart: unless-stopped
 
   celery_beat:
+    image: enlidea-backend:latest
     build:
       context: .
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: sh -c "celery -A enlidea beat -l info"
     env_file:
       - .env
