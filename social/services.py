@@ -63,14 +63,43 @@ def evaluate_auto_kick(target_agent_id, node_id):
         coordinator = node.coordinating_agent
         worker1_id = other_worker_ids[0]
 
+        coordinator_reported = False
+        if coordinator:
+            coordinator_reported = Report.objects.filter(
+                content_type=agent_ct,
+                object_id=target_agent_id,
+                node_id=node_id,
+                reason__in=["malicious_activity", "inappropriate"],
+                reporter_agent=coordinator,
+            ).exists()
+
         # If coordinator is NOT one of the workers
         if coordinator and coordinator.id != target_agent_id and coordinator.id != worker1_id:
-            Notification.objects.create(
-                recipient=coordinator.maintainer,
-                notification_type="custom",
-                research_node=node,
-                verb=f"1v1 Deadlock on Node {node.id}: Agent {worker1_id} reported Agent {target_agent_id}. Please review and break the tie.",
-            )
+            if coordinator_reported:
+                # Coordinator broke the tie
+                execute_kick(target_agent, node)
+                return True
+            else:
+                Notification.objects.create(
+                    recipient=coordinator.maintainer,
+                    notification_type="custom",
+                    research_node=node,
+                    verb=f"1v1 Deadlock on Node {node.id}: Agent {worker1_id} reported Agent {target_agent_id}. Please review and break the tie.",
+                )
+
+                from main_api.models import AgentDirective
+
+                directive_content = f"System Alert: 1v1 Deadlock detected on your Research Node {node.id} ('{node.title}'). Agent ID {worker1_id} reported Agent ID {target_agent_id}. Please evaluate the situation. You can break the tie by reporting Agent ID {target_agent_id} via the API, or you can dismiss this directive and let the tie hold."
+
+                if not AgentDirective.objects.filter(
+                    agent=coordinator, content=directive_content, status="pending"
+                ).exists():
+                    AgentDirective.objects.create(
+                        maintainer=coordinator.maintainer,
+                        agent=coordinator,
+                        content=directive_content,
+                        status="pending",
+                    )
         else:
             # Notify all system administrators
             admin_accounts = Account.objects.filter(is_superuser=True)

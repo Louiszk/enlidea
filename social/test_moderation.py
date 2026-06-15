@@ -150,8 +150,9 @@ class ModerationTests(APITestCase):
         self.node.refresh_from_db()
         self.assertEqual(self.node.status, "published")
 
-    def test_auto_kick_deadlock_notification(self):
-        # 2 workers only
+    def test_auto_kick_deadlock_coordinator_in_workers(self):
+        """When the coordinator is one of the two deadlocked workers, it requires admin intervention."""
+        # 2 workers only (agent1 is coordinator and a worker)
         self.node.assigned_agents.remove(self.agent3)
 
         url = reverse("report_content")
@@ -168,11 +169,67 @@ class ModerationTests(APITestCase):
         response = self.client.post(url, data, HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Agent 2 should NOT be kicked (it's a deadlock)
+        # Agent 2 should NOT be kicked
         self.assertIn(self.agent2, self.node.assigned_agents.all())
 
         # Should notify all superusers
         self.assertTrue(Notification.objects.filter(recipient=admin).exists())
+
+    def test_auto_kick_deadlock_coordinator_external_gets_directive(self):
+        """When coordinator is external to the deadlock, they receive a directive to break the tie."""
+        from main_api.models import AgentDirective
+
+        # 2 workers only (agent2 and agent3). Coordinator (agent1) is NOT a worker.
+        self.node.assigned_agents.remove(self.agent1)
+
+        url = reverse("report_content")
+        data = {
+            "target_type": "agent",
+            "target_id": self.agent3.id,
+            "reason": "malicious_activity",
+            "description": "I think agent3 is bad",
+            "node_id": self.node.id,
+        }
+
+        response = self.client.post(url, data, HTTP_X_AGENT_API_KEY=self.agent2_raw_key)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Agent 3 should NOT be kicked yet
+        self.assertIn(self.agent3, self.node.assigned_agents.all())
+
+        # Coordinator should get an AgentDirective
+        self.assertTrue(AgentDirective.objects.filter(agent=self.agent1, status="pending").exists())
+
+    def test_auto_kick_deadlock_coordinator_external_breaks_tie(self):
+        """When coordinator is external and reports a worker, the tie is instantly broken."""
+        # 2 workers only (agent2 and agent3). Coordinator (agent1) is NOT a worker.
+        self.node.assigned_agents.remove(self.agent1)
+
+        url = reverse("report_content")
+
+        # Coordinator (agent1) reports agent3 first
+        coord_data = {
+            "target_type": "agent",
+            "target_id": self.agent3.id,
+            "reason": "malicious_activity",
+            "description": "I agree with agent2",
+            "node_id": self.node.id,
+        }
+        self.client.post(url, coord_data, HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
+
+        # Agent2 reports agent3, triggering the deadlock check
+        worker_data = {
+            "target_type": "agent",
+            "target_id": self.agent3.id,
+            "reason": "malicious_activity",
+            "description": "Agent3 is bad",
+            "node_id": self.node.id,
+        }
+        response = self.client.post(url, worker_data, HTTP_X_AGENT_API_KEY=self.agent2_raw_key)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Agent 3 SHOULD be kicked because the coordinator broke the tie
+        self.assertNotIn(self.agent3, self.node.assigned_agents.all())
 
     def test_submit_complaint_by_user(self):
         self.client.force_authenticate(user=self.user)

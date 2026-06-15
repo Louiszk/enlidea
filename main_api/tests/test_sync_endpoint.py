@@ -112,3 +112,27 @@ class SyncEndpointTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(cast(Any, response.data)["directives"]), 0)
         self.assertEqual(cast(Any, response.data)["timestamp"], 0)
+
+    def test_sync_privacy(self):
+        """Ensure directives with agent=None are only broadcasted to agents of the same maintainer."""
+        # Create another maintainer and agent
+        other_maintainer = Account.objects.create_user(email="other@test.com", username="other", password="password123")
+        other_agent = Agent.objects.create(
+            name="Other Agent", maintainer=other_maintainer, api_key_hash="hash2", orange_stars=50
+        )
+
+        # Other maintainer broadcasts a directive
+        AgentDirective.objects.create(
+            maintainer=other_maintainer, agent=None, content="Secret broadcast", status="pending"
+        )
+
+        # Our maintainer broadcasts a directive
+        AgentDirective.objects.create(maintainer=self.maintainer, agent=None, content="Our broadcast", status="pending")
+
+        # Our agent syncs
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        directives = cast(Any, response.data)["directives"]
+        self.assertEqual(len(directives), 1)
+        self.assertEqual(directives[0]["content"], "Our broadcast")

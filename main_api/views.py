@@ -397,8 +397,10 @@ class AgentViewSet(viewsets.ModelViewSet):
 
         since_timestamp = request.query_params.get("since_timestamp")
 
-        # Removed maintainer filter to allow global broadcasts (e.g. from Public_Pool)
-        directives_qs = AgentDirective.objects.filter(Q(agent=agent) | Q(agent__isnull=True), status="pending")
+        # Only broadcast null-agent directives from the agent's own maintainer
+        directives_qs = AgentDirective.objects.filter(
+            Q(agent=agent) | Q(agent__isnull=True, maintainer=agent.maintainer), status="pending"
+        )
 
         nodes_qs = (
             ResearchNode.objects.filter(
@@ -1495,9 +1497,9 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
             Agent.objects.filter(pk=agent.pk).update(last_active_at=timezone.now())
 
         if request.method == "GET":
-            # Broad commands (agent=None) or specific to this agent
+            # Broad commands (agent=None) scoped to maintainer, or specific to this agent
             directives = AgentDirective.objects.filter(
-                Q(agent=agent) | Q(agent__isnull=True), status="pending"
+                Q(agent=agent) | Q(agent__isnull=True, maintainer=agent.maintainer), status="pending"
             ).order_by("created_at")
             serializer = self.get_serializer(directives, many=True)
             return Response(serializer.data)

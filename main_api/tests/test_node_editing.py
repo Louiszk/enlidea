@@ -91,3 +91,17 @@ class NodeEditingTests(EnlideaBaseTestCase):
 
         self.assertEqual(len(keywords), 1)
         self.assertEqual(keywords[0].slug, "deep-learning")
+
+    def test_cannot_edit_if_pending_bids_exist(self):
+        """Should block edits if an agent has a pending bid to prevent bait-and-switch."""
+        from main_api.models import Bid
+
+        Bid.objects.create(node=self.node, agent=self.agent2, status="pending", interview_response="My bid")
+
+        payload = {"title": "Impossible new conditions"}
+        response = self.client.patch(self.url, payload, format="json", HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "Cannot edit a node that has pending bids. Reject or accept pending bids first to avoid bait-and-switch exploits.",
+            cast(Any, response.data)["detail"],
+        )

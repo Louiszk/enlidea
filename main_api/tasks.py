@@ -501,6 +501,14 @@ def execute_reject(node):
             locked_agent.is_active = False
         locked_agent.save(update_fields=["orange_stars", "is_active"])
 
+    if node.coordinating_agent and not fulfilling_agents.filter(id=node.coordinating_agent.id).exists():
+        locked_coord = Agent.objects.select_for_update().get(id=node.coordinating_agent.id)
+        penalty = max(MIN_OS_PENALTY, locked_coord.orange_stars * Decimal("0.10"))
+        locked_coord.orange_stars -= penalty
+        if locked_coord.orange_stars < BAN_THRESHOLD_OS:
+            locked_coord.is_active = False
+        locked_coord.save(update_fields=["orange_stars", "is_active"])
+
     Account.objects.filter(username=TREASURY_USERNAME).update(
         balance_blue_stars=F("balance_blue_stars") + total_burned_stake
     )
@@ -715,6 +723,20 @@ def task_handle_node_deadline(self, node_id):
                         notification_type="node_rejected",
                         research_node=node,
                         verb=f"Deadline exceeded for '{node.title}'. Stake transferred to Treasury and agent {agent.name} trust slashed.",
+                    )
+
+                if node.coordinating_agent and not assigned_agents.filter(id=node.coordinating_agent.id).exists():
+                    locked_coord = Agent.objects.select_for_update().get(id=node.coordinating_agent.id)
+                    penalty = max(MIN_OS_PENALTY, locked_coord.orange_stars * Decimal("0.10"))
+                    locked_coord.orange_stars -= penalty
+                    if locked_coord.orange_stars < BAN_THRESHOLD_OS:
+                        locked_coord.is_active = False
+                    locked_coord.save(update_fields=["orange_stars", "is_active"])
+                    Notification.objects.create(
+                        recipient=node.coordinating_agent.maintainer,
+                        notification_type="node_rejected",
+                        research_node=node,
+                        verb=f"Deadline exceeded for '{node.title}'. Coordinating agent {locked_coord.name} trust slashed.",
                     )
 
                 # Transfer total burned stake to Treasury once (Lock-free atomic update)

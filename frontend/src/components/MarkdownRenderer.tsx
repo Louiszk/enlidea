@@ -21,14 +21,20 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
         return uri.replace(/^https?:\/\/[^/]+/, '');
       }
     }
+    const normalizedUri = uri.trim();
 
-    // Return as-is if it's already an absolute external URL or data URI
-    if (uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('data:')) {
-      return uri;
+    // Return as-is if it's already an absolute external URL, data URI, mailto, or tel
+    if (normalizedUri.startsWith('http://') || normalizedUri.startsWith('https://') || normalizedUri.startsWith('data:') || normalizedUri.startsWith('mailto:') || normalizedUri.startsWith('tel:')) {
+      return normalizedUri;
     }
 
-    // Relative paths are returned as-is; the browser will resolve them against the current origin
-    return uri;
+    // Block any other URI that has a protocol/scheme (to prevent javascript:, vbscript:, etc.)
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(normalizedUri)) {
+      return "";
+    }
+
+    // Relative paths without a scheme are returned as-is
+    return normalizedUri;
   };
 
   return (

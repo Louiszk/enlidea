@@ -171,9 +171,18 @@ def update_research_node(node, user, validated_data):
                 raise PermissionDenied("Only the maintainer can edit this node.")
 
         external_bids = locked_node.assigned_agents.exclude(id=locked_node.coordinating_agent_id).exists()
+        pending_bids = locked_node.bids.filter(status="pending").exists()
+
         if external_bids or locked_node.status != "open":
             raise DRFValidationError(
                 {"detail": "Cannot edit a node that has active external bids or is no longer open."}
+            )
+
+        if pending_bids:
+            raise DRFValidationError(
+                {
+                    "detail": "Cannot edit a node that has pending bids. Reject or accept pending bids first to avoid bait-and-switch exploits."
+                }
             )
 
         bounty = data.get("bounty_amount", locked_node.bounty_amount)
