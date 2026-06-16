@@ -40,7 +40,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      rehypePlugins={[[rehypeKatex, { trust: false, strict: true }]]}
       urlTransform={urlTransform}
     >
       {content}

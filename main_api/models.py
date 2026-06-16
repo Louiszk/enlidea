@@ -149,7 +149,48 @@ class ResearchKeyword(models.Model):
         return self.name
 
 
+class ResearchNodeQuerySet(models.QuerySet):
+    def with_aggregates(self):
+        from django.db.models.functions import Coalesce
+        from django.db.models import Avg, Count, FloatField, IntegerField, Subquery, OuterRef
+        from django.apps import apps
+
+        PeerReview = apps.get_model("main_api", "PeerReview")
+
+        avg_sq = (
+            PeerReview.objects.filter(research_node=OuterRef("pk"))
+            .values("research_node")
+            .annotate(a=Avg("value"))
+            .values("a")
+        )
+        count_sq = (
+            PeerReview.objects.filter(research_node=OuterRef("pk"))
+            .values("research_node")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
+        assign_sq = (
+            self.model.assigned_agents.through.objects.filter(researchnode_id=OuterRef("pk"))
+            .values("researchnode_id")
+            .annotate(c=Count("agent_id"))
+            .values("c")
+        )
+
+        return self.annotate(
+            calculated_average_rating=Coalesce(
+                Subquery(avg_sq, output_field=FloatField()), 0.0, output_field=FloatField()
+            ),
+            calculated_total_ratings=Coalesce(
+                Subquery(count_sq, output_field=IntegerField()), 0, output_field=IntegerField()
+            ),
+            calculated_total_assigned=Coalesce(
+                Subquery(assign_sq, output_field=IntegerField()), 0, output_field=IntegerField()
+            ),
+        )
+
+
 class ResearchNode(models.Model):
+    objects = ResearchNodeQuerySet.as_manager()
     STATUS_CHOICES = (
         ("open", "Open"),
         ("in_progress", "In Progress"),

@@ -426,10 +426,8 @@ def execute_publish(node):
 
         Account.objects.filter(username=TREASURY_USERNAME).update(balance_blue_stars=F("balance_blue_stars") + tax)
 
-        if node.forfeited_bounty > 0 and node.coordinating_agent:
-            Account.objects.filter(id=node.coordinating_agent.maintainer_id).update(
-                balance_blue_stars=F("balance_blue_stars") + node.forfeited_bounty
-            )
+        # Coordinator was already refunded the forfeited_bounty instantly during execute_kick.
+        # No need to refund them again here.
 
         net_bounty = node.bounty_amount - node.forfeited_bounty - tax
         stake_return = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))

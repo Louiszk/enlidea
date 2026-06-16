@@ -36,6 +36,7 @@ from .serializer import (
     PeerReviewSerializer,
     AgentSerializer,
     UserSerializer,
+    UserSearchSerializer,
     CreateResearchNodeSerializer,
     EditResearchNodeSerializer,
     ResearchNodeBodySerializer,
@@ -403,7 +404,8 @@ class AgentViewSet(viewsets.ModelViewSet):
         )
 
         nodes_qs = (
-            ResearchNode.objects.filter(
+            ResearchNode.objects.with_aggregates()
+            .filter(
                 Q(assigned_agents=agent) | Q(coordinating_agent=agent),
                 status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
             )
@@ -412,7 +414,11 @@ class AgentViewSet(viewsets.ModelViewSet):
             .distinct()
         )
 
-        reviews_qs = PeerReview.objects.filter(assigned_reviewer=agent, status__in=["pending", "claimed"])
+        from django.db.models import Prefetch
+
+        reviews_qs = PeerReview.objects.filter(
+            assigned_reviewer=agent, status__in=["pending", "claimed"]
+        ).prefetch_related(Prefetch("research_node", queryset=ResearchNode.objects.with_aggregates()))
 
         bids_to_evaluate_qs = Bid.objects.filter(node__coordinating_agent=agent, status="pending").select_related(
             "node", "agent"
@@ -564,7 +570,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.order_by("-created")
 
-        return queryset.distinct()
+        return queryset.with_aggregates().distinct()
 
     @extend_schema(responses=ResearchNodeListResponseSerializer)
     def list(self, request, *args, **kwargs):
@@ -629,7 +635,8 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
     def active(self, request):
         user_agents = Agent.objects.filter(maintainer=request.user)
         nodes = (
-            ResearchNode.objects.filter(Q(coordinating_agent__in=user_agents) | Q(assigned_agents__in=user_agents))
+            ResearchNode.objects.with_aggregates()
+            .filter(Q(coordinating_agent__in=user_agents) | Q(assigned_agents__in=user_agents))
             .filter(status__in=["open", "in_progress", "in_review", "awaiting_coordinator"])
             .distinct()
         )
@@ -1635,11 +1642,12 @@ def get_high_impact_research(request):
     Returns high-impact research nodes grouped by categories.
     """
     # 1. Top Bounties (Open nodes with highest blue star amounts)
-    top_bounties = ResearchNode.objects.filter(status="open").order_by("-bounty_amount")[:10]
+    top_bounties = ResearchNode.objects.with_aggregates().filter(status="open").order_by("-bounty_amount")[:10]
 
     # 2. Most Collaborative (Nodes with most assigned agents)
     most_collaborative = (
-        ResearchNode.objects.filter(status__in=["open", "in_progress", "in_review", "awaiting_coordinator"])
+        ResearchNode.objects.with_aggregates()
+        .filter(status__in=["open", "in_progress", "in_review", "awaiting_coordinator"])
         .annotate(agent_count=Count("assigned_agents"))
         .order_by("-agent_count")[:10]
     )
@@ -1725,9 +1733,11 @@ def search_results(request):
     capabilities = Capability.objects.filter(title__icontains=query)[:10]
 
     # 3. Research Nodes (Non-published only, following user's hint that published nodes shouldn't be here)
-    nodes = ResearchNode.objects.filter(Q(title__icontains=query) | Q(description__icontains=query)).exclude(
-        status="published"
-    )[:10]
+    nodes = (
+        ResearchNode.objects.with_aggregates()
+        .filter(Q(title__icontains=query) | Q(description__icontains=query))
+        .exclude(status="published")[:10]
+    )
 
     # 4. Papers
     papers = Paper.objects.filter(Q(title__icontains=query) | Q(content__icontains=query)).order_by("-published_date")[
@@ -1737,7 +1747,7 @@ def search_results(request):
     serializer_context = {"request": request}
 
     data = [
-        {"type": "users", "results": UserSerializer(users, many=True, context=serializer_context).data},
+        {"type": "users", "results": UserSearchSerializer(users, many=True, context=serializer_context).data},
         {
             "type": "capabilities",
             "results": CapabilitySearchSerializer(capabilities, many=True, context=serializer_context).data,

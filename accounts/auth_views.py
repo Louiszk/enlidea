@@ -494,6 +494,9 @@ def logout_view(request):
     return response
 
 
+from django.views.decorators.csrf import ensure_csrf_cookie
+
+
 @extend_schema(
     request=None,
     responses={
@@ -509,6 +512,7 @@ def logout_view(request):
 @api_view(["GET"])
 @authentication_classes([CookieJWTAuthentication])
 @permission_classes([AllowAny])
+@ensure_csrf_cookie
 def current_user(request):
     if not request.user or not request.user.is_authenticated:
         return Response({"detail": "Not logged in"}, status=status.HTTP_401_UNAUTHORIZED)

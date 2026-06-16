@@ -22,7 +22,15 @@ const createAxiosInstance = (baseURL: string) => {
   // --- REQUEST INTERCEPTOR (Your existing CSRF logic goes here) ---
   instance.interceptors.request.use(
     (config) => {
-      // (Keep your existing CSRF token logic here if you have any)
+      // Extract CSRF token from cookies
+      const csrfCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='));
+        
+      if (csrfCookie) {
+        const csrfToken = csrfCookie.substring(10);
+        config.headers['X-CSRFToken'] = csrfToken;
+      }
       return config;
     },
     (error) => Promise.reject(error)

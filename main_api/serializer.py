@@ -50,6 +50,12 @@ class AgentMessageSerializer(serializers.ModelSerializer):
         return value
 
 
+class UserSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "username", "avatar"]
+
+
 class UserSerializer(serializers.ModelSerializer):
     average_rating = serializers.FloatField(source="average_trust_score", read_only=True)
     average_soundness = serializers.FloatField(read_only=True)
@@ -229,13 +235,13 @@ class ResearchNodeSerializer(serializers.ModelSerializer):
     required_capabilities = CapabilitySerializer(many=True, read_only=True)
     keywords = ResearchKeywordSerializer(many=True, read_only=True)
     saves = serializers.IntegerField(read_only=True)
-    average_rating = serializers.FloatField(read_only=True)
+    average_rating = serializers.SerializerMethodField()
     average_soundness = serializers.FloatField(read_only=True)
     average_novelty = serializers.FloatField(read_only=True)
     average_significance = serializers.FloatField(read_only=True)
     average_clarity = serializers.FloatField(read_only=True)
-    total_ratings = serializers.IntegerField(read_only=True)
-    total_assigned = serializers.IntegerField(read_only=True)
+    total_ratings = serializers.SerializerMethodField()
+    total_assigned = serializers.SerializerMethodField()
 
     class Meta:
         model = ResearchNode
@@ -276,9 +282,6 @@ class ResearchNodeSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation["average_rating"] = instance.average_rating
-        representation["total_ratings"] = instance.reviews.count()
-        representation["total_assigned"] = instance.total_assigned
 
         # Only show body if published, or if the requester is the coordinator, assigned agent, or assigned reviewer.
         request = self.context.get("request")
@@ -308,8 +311,21 @@ class ResearchNodeSerializer(serializers.ModelSerializer):
 
         if not show_body:
             representation["body"] = "Content restricted to assigned actors until publication."
+            representation["coordination_plan"] = "Content restricted to assigned actors until publication."
 
         return representation
+
+    @extend_schema_field(serializers.FloatField())
+    def get_average_rating(self, obj):
+        return getattr(obj, "calculated_average_rating", obj.average_rating)
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_total_ratings(self, obj):
+        return getattr(obj, "calculated_total_ratings", obj.reviews.count())
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_total_assigned(self, obj):
+        return getattr(obj, "calculated_total_assigned", obj.total_assigned)
 
 
 class ResearchNodeCardSerializer(serializers.ModelSerializer):
@@ -317,9 +333,9 @@ class ResearchNodeCardSerializer(serializers.ModelSerializer):
     required_capabilities = serializers.SerializerMethodField()
     keywords = ResearchKeywordSerializer(many=True, read_only=True)
     saves = serializers.IntegerField(read_only=True)
-    average_rating = serializers.FloatField(read_only=True)
-    total_ratings = serializers.IntegerField(read_only=True)
-    total_assigned = serializers.IntegerField(read_only=True)
+    average_rating = serializers.SerializerMethodField()
+    total_ratings = serializers.SerializerMethodField()
+    total_assigned = serializers.SerializerMethodField()
 
     class Meta:
         model = ResearchNode
@@ -358,12 +374,17 @@ class ResearchNodeCardSerializer(serializers.ModelSerializer):
     def get_required_capabilities(self, obj):
         return [cap.slug for cap in obj.required_capabilities.all()]
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation["average_rating"] = instance.average_rating
-        representation["total_ratings"] = instance.reviews.count()
-        representation["total_assigned"] = instance.total_assigned
-        return representation
+    @extend_schema_field(serializers.FloatField())
+    def get_average_rating(self, obj):
+        return getattr(obj, "calculated_average_rating", obj.average_rating)
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_total_ratings(self, obj):
+        return getattr(obj, "calculated_total_ratings", obj.reviews.count())
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_total_assigned(self, obj):
+        return getattr(obj, "calculated_total_assigned", obj.total_assigned)
 
 
 class PaperSerializer(serializers.ModelSerializer):

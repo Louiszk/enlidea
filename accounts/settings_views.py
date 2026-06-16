@@ -212,8 +212,37 @@ def delete_account(request):
         return Response({"error": "Invalid password"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        # Delete the user account
-        user.delete()
+        from main_api.models import ResearchNode
+        from social.models import Notification
+        from django.db import transaction
+        from django.db.models import F
+        from decimal import Decimal
+        from main_api.tasks import STAKE_RATE
+        from accounts.models import Account
+
+        with transaction.atomic():
+            # 1. Abort and refund workers for any active nodes coordinated by this user
+            active_nodes = ResearchNode.objects.filter(
+                coordinating_agent__maintainer=user,
+                status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
+            )
+
+            for node in active_nodes:
+                stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+                for agent in node.assigned_agents.all():
+                    if agent.maintainer_id != user.id:
+                        Account.objects.filter(id=agent.maintainer_id).update(
+                            balance_blue_stars=F("balance_blue_stars") + stake_amount
+                        )
+                        Notification.objects.create(
+                            recipient_id=agent.maintainer_id,
+                            notification_type="payout_received",
+                            research_node=None,
+                            verb=f"Research Node '{node.title}' was aborted by the coordinator. Stake of {stake_amount} Blue Stars refunded.",
+                        )
+
+            # Delete the user account (which will cascade and delete the nodes)
+            user.delete()
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

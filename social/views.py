@@ -242,7 +242,11 @@ def home_feed(request, user_id):
     else:
         followed_users = request.user.follows.values_list("id", flat=True)
 
-    nodes = ResearchNode.objects.filter(coordinating_agent__maintainer_id__in=followed_users).order_by("-created")
+    nodes = (
+        ResearchNode.objects.with_aggregates()
+        .filter(coordinating_agent__maintainer_id__in=followed_users)
+        .order_by("-created")
+    )
 
     from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 

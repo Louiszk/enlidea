@@ -9,6 +9,7 @@ def get_trending_data():
     # 1. Fetch all nodes with a trend score > 0 in a single query
     trending_nodes = list(
         ResearchNode.with_trend_score()
+        .with_aggregates()
         .filter(trend_score__gt=0, status__in=["open", "in_progress", "in_review", "awaiting_coordinator"])
         .prefetch_related("required_capabilities", "keywords", "type")
     )
