@@ -231,8 +231,9 @@ def delete_research_node(node, user):
             )
 
         if locked_instance.coordinating_agent:
+            refund_amount = max(Decimal("0"), locked_instance.bounty_amount - locked_instance.forfeited_bounty)
             User.objects.filter(id=locked_instance.coordinating_agent.maintainer_id).update(
-                balance_blue_stars=F("balance_blue_stars") + locked_instance.bounty_amount
+                balance_blue_stars=F("balance_blue_stars") + refund_amount
             )
 
         if locked_instance.assigned_agents.exists():

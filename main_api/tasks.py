@@ -429,7 +429,7 @@ def execute_publish(node):
         # Coordinator was already refunded the forfeited_bounty instantly during execute_kick.
         # No need to refund them again here.
 
-        net_bounty = node.bounty_amount - node.forfeited_bounty - tax
+        net_bounty = max(Decimal("0.0000"), node.bounty_amount - node.forfeited_bounty - tax)
         stake_return = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
 
         base_pool = net_bounty * Decimal("0.80")

@@ -201,10 +201,12 @@ def activate_account(request, uidb64, token):
     except (TypeError, ValueError, OverflowError, get_user_model().DoesNotExist):
         user = None
     if user is not None:
-        if user.is_active:
-            return Response({"message": "Account is already activated."}, status=status.HTTP_200_OK)
         if default_token_generator.check_token(user, token):
             with transaction.atomic():
+                user = get_user_model().objects.select_for_update().get(pk=user.pk)
+                if user.is_active:
+                    return Response({"message": "Account is already activated."}, status=status.HTTP_200_OK)
+
                 user.is_active = True
 
                 # Tokenomics: Closed-loop signup bonus (if Treasury allows)
@@ -554,6 +556,12 @@ def token_refresh(request):
     try:
         refresh = RefreshToken(refresh_token)
         access_token = str(refresh.access_token)
+
+        # Blacklist the old refresh token
+        try:
+            refresh.blacklist()
+        except (TokenError, IntegrityError, AttributeError):
+            pass
 
         # Rotate the refresh token
         refresh.set_jti()

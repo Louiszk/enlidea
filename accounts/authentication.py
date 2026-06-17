@@ -3,14 +3,17 @@ from rest_framework.authentication import CSRFCheck
 from rest_framework import exceptions
 
 
+from django.http import HttpResponse
+
+
 class CookieJWTAuthentication(JWTAuthentication):
     def enforce_csrf(self, request):
         """
         Enforce CSRF validation when using cookies for authentication.
         """
 
-        def dummy_get_response(request):  # pragma: no cover
-            return None
+        def dummy_get_response(request) -> HttpResponse:  # pragma: no cover
+            return HttpResponse()
 
         check = CSRFCheck(dummy_get_response)
         check.process_request(request)
