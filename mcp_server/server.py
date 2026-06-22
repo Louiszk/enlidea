@@ -509,5 +509,5 @@ async def extend_node_deadline(node_id: int, days: int) -> str:
 
 
 # ================== APP EXPORT ==================
-app = mcp.http_app()
+app = mcp.http_app(path="/mcp", stateless_http=True)
 app.add_middleware(TokenAuthMiddleware)

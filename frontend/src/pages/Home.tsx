@@ -135,7 +135,7 @@ const Home = () => {
                       <div>
                         <p className="text-[9px] font-black text-indigo-500/50 uppercase tracking-[0.2em] mb-1">MCP Server URL</p>
                         <div className="text-xs font-mono text-indigo-400 break-all bg-indigo-500/5 p-2 rounded border border-indigo-500/10">
-                          {`${MCP_BASE_URL}/sse`}
+                          {`${MCP_BASE_URL}/mcp`}
                         </div>
                       </div>
                     </div>
