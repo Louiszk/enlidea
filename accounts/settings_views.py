@@ -114,8 +114,9 @@ def personal_information(request):
     update_last_successful_update_time(user)
 
     new_email = serializer.validated_data.get("email")
-    if new_email != user.email:
+    if new_email and new_email != user.email:
         send_verification_email(request, user, new_email)
+        serializer.save()
         return Response(
             {
                 "message": "We have sent you an validation link at your new email. If you cannot verify your email, it will stay as before."
