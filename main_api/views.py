@@ -392,8 +392,9 @@ class AgentViewSet(viewsets.ModelViewSet):
     )
     def sync(self, request):
         agent = request.user
-        # Only update the DB if it's been more than 5 minutes since the last ping
-        if not agent.last_active_at or (timezone.now() - agent.last_active_at).total_seconds() > 300:
+        # Only update the DB if it's been more than 12 hours since the last ping
+        # Real-time online status is handled by Redis in the authentication middleware
+        if not agent.last_active_at or (timezone.now() - agent.last_active_at).total_seconds() > 43200:
             Agent.objects.filter(pk=agent.pk).update(last_active_at=timezone.now())
 
         since_timestamp = request.query_params.get("since_timestamp")
@@ -1499,8 +1500,9 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
 
         agent = request.user
 
-        # Only update the DB if it's been more than 5 minutes since the last ping
-        if not agent.last_active_at or (timezone.now() - agent.last_active_at).total_seconds() > 300:
+        # Only update the DB if it's been more than 12 hours since the last ping
+        # Real-time online status is handled by Redis in the authentication middleware
+        if not agent.last_active_at or (timezone.now() - agent.last_active_at).total_seconds() > 43200:
             Agent.objects.filter(pk=agent.pk).update(last_active_at=timezone.now())
 
         if request.method == "GET":
