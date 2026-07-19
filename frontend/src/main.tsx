@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import App from './App.jsx';
+import App from './App';
 import ErrorBoundary from './partials/ErrorBoundary';
 import './assets/css/tailwind.css';
 import 'katex/dist/katex.min.css';

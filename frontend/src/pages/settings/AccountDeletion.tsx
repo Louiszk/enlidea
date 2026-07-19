@@ -1,4 +1,4 @@
-// AccountDeletion.jsx
+// AccountDeletion.tsx
 import React, { useState } from 'react';
 import axios from 'axios';
 import settingsService from '../../services/settingsService';
