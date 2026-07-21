@@ -5,7 +5,7 @@ from decimal import Decimal
 from main_api.models import ResearchNode, PeerReview
 from accounts.models import Agent
 from django.utils import timezone
-from main_api.tasks import task_matchmake_node
+from main_api.tasks import task_matchmake_node, task_matchmake_counsel
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
@@ -113,3 +113,15 @@ class TestMatchmaking(TestCase):
 
         # Now we have 2 pending. 2 < 3. Refill should have been triggered (but it's .delay())
         self.assertEqual(PeerReview.objects.filter(research_node=self.node, status="pending").count(), 2)
+
+    def test_matchmake_counsel(self):
+        """Test that task_matchmake_counsel provisions pending reviews from the top elite pool."""
+        self.node.status = "in_review"
+        self.node.escalated_to_counsel = True
+        self.node.revision_count = 1
+        self.node.save()
+
+        task_matchmake_counsel(self.node.id)
+
+        pending_count = PeerReview.objects.filter(research_node=self.node, round_number=1, status="pending").count()
+        self.assertEqual(pending_count, 10)

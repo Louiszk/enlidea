@@ -2,9 +2,17 @@ from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
 import hashlib
+from unittest.mock import patch
 from accounts.models import Agent, Account
 from main_api.models import ResearchNode, PeerReview
-from main_api.tasks import task_handle_node_deadline, task_sweep_stale_reviews
+from main_api.tasks import (
+    task_handle_node_deadline,
+    task_sweep_stale_reviews,
+    task_flush_expired_tokens,
+    task_clean_anon_agents,
+    task_sweep_deadlines,
+    task_fill_counsel_shortages,
+)
 
 
 class CeleryTasksTest(TestCase):
@@ -143,3 +151,136 @@ class CeleryTasksTest(TestCase):
         self.assertTrue(PeerReview.objects.filter(id=fresh_review.id).exists())
         self.assertTrue(PeerReview.objects.filter(id=completed_review.id).exists())
         self.assertFalse(PeerReview.objects.filter(id=stale_review.id).exists())
+
+    @patch("django.core.management.call_command")
+    def test_flush_expired_tokens(self, mock_call_command):
+        task_flush_expired_tokens()
+        mock_call_command.assert_called_once_with("flushexpiredtokens")
+
+        # Test exception handling
+        mock_call_command.side_effect = Exception("Test Error")
+        task_flush_expired_tokens()
+
+    def test_clean_anon_agents(self):
+        stale_anon = Agent.objects.create(
+            name="Anon_Stale",
+            maintainer=self.maintainer,
+            api_key_hash=hashlib.sha256("anon_stale".encode()).hexdigest(),
+        )
+        Agent.objects.filter(id=stale_anon.id).update(created_at=timezone.now() - timedelta(hours=26))
+
+        fresh_anon = Agent.objects.create(
+            name="Anon_Fresh",
+            maintainer=self.maintainer,
+            api_key_hash=hashlib.sha256("anon_fresh".encode()).hexdigest(),
+        )
+
+        stale_regular = Agent.objects.create(
+            name="Regular_Stale",
+            maintainer=self.maintainer,
+            api_key_hash=hashlib.sha256("regular_stale".encode()).hexdigest(),
+        )
+        Agent.objects.filter(id=stale_regular.id).update(created_at=timezone.now() - timedelta(hours=26))
+
+        task_clean_anon_agents()
+
+        self.assertFalse(Agent.objects.filter(id=stale_anon.id).exists())
+        self.assertTrue(Agent.objects.filter(id=fresh_anon.id).exists())
+        self.assertTrue(Agent.objects.filter(id=stale_regular.id).exists())
+
+    @patch("main_api.tasks.task_handle_node_deadline.delay")
+    def test_sweep_deadlines(self, mock_delay):
+        self.node.status = "completed"
+        self.node.save()
+
+        expired_node = ResearchNode.objects.create(
+            title="Expired Node",
+            description="Test Description",
+            body="Test Body",
+            coordinating_agent=self.coordinator,
+            bounty_amount=100,
+            required_reviews=3,
+            status="open",
+            deadline=timezone.now() - timedelta(minutes=5),
+        )
+        ResearchNode.objects.create(
+            title="Active Node",
+            description="Test Description",
+            body="Test Body",
+            coordinating_agent=self.coordinator,
+            bounty_amount=100,
+            required_reviews=3,
+            status="open",
+            deadline=timezone.now() + timedelta(hours=1),
+        )
+
+        task_sweep_deadlines()
+
+        mock_delay.assert_called_once_with(expired_node.id)
+
+    @patch("main_api.tasks.task_matchmake_counsel.delay")
+    def test_fill_counsel_shortages(self, mock_delay):
+        shortage_node = ResearchNode.objects.create(
+            title="Shortage Node",
+            description="Test Description",
+            body="Test Body",
+            coordinating_agent=self.coordinator,
+            bounty_amount=100,
+            required_reviews=3,
+            status="in_review",
+            escalated_to_counsel=True,
+        )
+        PeerReview.objects.create(
+            research_node=shortage_node,
+            assigned_reviewer=self.worker1,
+            status="claimed",
+            round_number=shortage_node.revision_count,
+            soundness=8,
+            significance=8,
+            novelty=8,
+            clarity=8,
+            value=8.0,
+        )
+        PeerReview.objects.create(
+            research_node=shortage_node,
+            assigned_reviewer=self.worker2,
+            status="completed",
+            round_number=shortage_node.revision_count,
+            soundness=8,
+            significance=8,
+            novelty=8,
+            clarity=8,
+            value=8.0,
+        )
+
+        satisfied_node = ResearchNode.objects.create(
+            title="Satisfied Node",
+            description="Test Description",
+            body="Test Body",
+            coordinating_agent=self.coordinator,
+            bounty_amount=100,
+            required_reviews=3,
+            status="in_review",
+            escalated_to_counsel=True,
+        )
+        for i in range(5):
+            agent = Agent.objects.create(
+                name=f"CounselWorker_{i}",
+                maintainer=self.maintainer,
+                api_key_hash=hashlib.sha256(f"cw_{i}".encode()).hexdigest(),
+            )
+            PeerReview.objects.create(
+                research_node=satisfied_node,
+                assigned_reviewer=agent,
+                status="claimed",
+                round_number=satisfied_node.revision_count,
+                soundness=8,
+                significance=8,
+                novelty=8,
+                clarity=8,
+                value=8.0,
+            )
+
+        task_fill_counsel_shortages()
+
+        mock_delay.assert_called_once_with(shortage_node.id)

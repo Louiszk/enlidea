@@ -210,6 +210,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "main_api.tasks.task_fill_counsel_shortages",
         "schedule": timedelta(hours=2),
     },
+    "task_flush_expired_tokens": {
+        "task": "main_api.tasks.task_flush_expired_tokens",
+        "schedule": timedelta(days=1),
+    },
+    "task_clean_anon_agents": {
+        "task": "main_api.tasks.task_clean_anon_agents",
+        "schedule": timedelta(hours=1),
+    },
 }
 
 # Static files (CSS, JavaScript, Images)

@@ -888,3 +888,27 @@ def task_fill_counsel_shortages():
                 f"Counsel shortage on Node {node.id} ({firm_reviews}/5 firm reviews). Re-triggering matchmaking."
             )
             task_matchmake_counsel.delay(node.id)
+
+
+@shared_task
+def task_flush_expired_tokens():
+    from django.core.management import call_command
+
+    try:
+        call_command("flushexpiredtokens")
+        logger.info("Successfully flushed expired SimpleJWT tokens.")
+    except Exception as e:
+        logger.error(f"Error flushing expired tokens: {str(e)}")
+
+
+@shared_task
+def task_clean_anon_agents():
+    from accounts.models import Agent
+
+    cutoff = timezone.now() - timedelta(hours=24)
+    try:
+        deleted_count, _ = Agent.objects.filter(name__startswith="Anon_", created_at__lt=cutoff).delete()
+        if deleted_count > 0:
+            logger.info(f"Cleaned up {deleted_count} stale Anon_ agents older than 24 hours.")
+    except Exception as e:
+        logger.error(f"Error cleaning stale Anon_ agents: {str(e)}")

@@ -4,7 +4,7 @@ from django.urls import reverse
 import hashlib
 from main_api.models import PeerReview
 from accounts.models import Agent, Account
-from main_api.tasks import task_resolve_node
+from main_api.tasks import task_resolve_node, task_auto_resolve_coordinator_decision
 from .test_agent_auth import EnlideaBaseTestCase
 from decimal import Decimal
 
@@ -298,3 +298,25 @@ class OrchestratorTests(EnlideaBaseTestCase):
         self.assertEqual(m_worker1.balance_blue_stars, Decimal("1042.6667"))
         self.assertEqual(m_worker2.balance_blue_stars, Decimal("1042.6667"))
         self.assertEqual(m_worker3.balance_blue_stars, Decimal("1042.6667"))
+
+    def test_auto_resolve_coordinator_decision(self):
+        from unittest.mock import patch
+        from django.utils import timezone
+        from datetime import timedelta
+
+        node = self.create_node(self.agent1, collaborators=1, caps=[self.cap_python])
+        node.status = "awaiting_coordinator"
+        node.orchestrator_verdict = "ACCEPT"
+        node.decision_deadline = timezone.now() - timedelta(minutes=5)
+        node.save()
+
+        with patch("main_api.tasks.execute_publish") as mock_publish:
+            task_auto_resolve_coordinator_decision(node.id)
+            mock_publish.assert_called_once_with(node)
+
+        # Test rejection path
+        node.orchestrator_verdict = "REJECT"
+        node.save()
+        with patch("main_api.tasks.execute_reject") as mock_reject:
+            task_auto_resolve_coordinator_decision(node.id)
+            mock_reject.assert_called_once_with(node)
