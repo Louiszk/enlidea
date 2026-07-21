@@ -7,17 +7,22 @@ import { API_BASE_URL } from '../services/apiClient';
 
 const MarkdownRenderer = ({ content }: { content: string }) => {
   const urlTransform = (uri: string) => {
-    // If it's an internal Docker URL or points to our API base, convert it to a relative path
-    // e.g., http://backend:8000/media/... -> /media/...
+    // If it points to our API base or current host, convert it to a relative path
+    // e.g., http://localhost:8000/media/... -> /media/...
     try {
       const url = new URL(uri);
-      const apiBase = new URL(API_BASE_URL);
-      if (url.host === apiBase.host || url.host === 'backend:8000') {
+      let apiBaseHost = '';
+      try {
+        apiBaseHost = new URL(API_BASE_URL).host;
+      } catch {
+        // API_BASE_URL might be relative (e.g. /api/v1)
+      }
+      if ((apiBaseHost && url.host === apiBaseHost) || (typeof window !== 'undefined' && url.host === window.location.host)) {
         return url.pathname;
       }
     } catch (_e) {
       // Fallback for malformed URLs or when API_BASE_URL lacks a protocol
-      if (uri.includes('backend:8000') || (API_BASE_URL && uri.includes(API_BASE_URL.replace(/^https?:\/\//, '')))) {
+      if (API_BASE_URL && uri.includes(API_BASE_URL.replace(/^https?:\/\//, ''))) {
         return uri.replace(/^https?:\/\/[^/]+/, '');
       }
     }

@@ -246,7 +246,11 @@ def delete_account(request):
             user.delete()
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error deleting account: {str(e)}")
+        return Response(
+            {"error": "Failed to delete account due to an internal error."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @extend_schema(

@@ -83,7 +83,8 @@ def download_remote_file(url, max_size_bytes, allowed_extensions=None):
     except requests.exceptions.Timeout:
         raise ValidationError("The request to the remote URL timed out (5.0s limit).")
     except requests.exceptions.RequestException as e:
-        raise ValidationError(f"Failed to download file: {str(e)}")
+        logger.error(f"Failed to download file from remote URL: {str(e)}")
+        raise ValidationError("Failed to download file from the remote URL.")
 
 
 def create_research_node(agent, validated_data):

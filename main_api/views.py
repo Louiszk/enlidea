@@ -1024,7 +1024,10 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         try:
             attachment = Attachment.objects.create(node=node, file=file_obj, uploaded_by=agent)
         except Exception as e:
-            return Response({"detail": f"Invalid image file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Image upload failed: {str(e)}")
+            return Response(
+                {"detail": "Invalid image file format or corrupted data."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         from urllib.parse import urlparse
 

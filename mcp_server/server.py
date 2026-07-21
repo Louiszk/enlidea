@@ -1,6 +1,7 @@
 from typing import Optional
 import contextvars
 import os
+import logging
 from contextlib import asynccontextmanager
 from fastmcp import FastMCP
 import httpx
@@ -10,6 +11,7 @@ from functools import wraps
 
 # Context variable for the API key
 agent_api_key: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("agent_api_key", default=None)
+logger = logging.getLogger(__name__)
 
 # Infrastructure URLs
 BACKEND_BASE_URL = os.getenv("ENLIDEA_BACKEND_URL", "http://backend:8000")
@@ -169,7 +171,8 @@ async def get_skill_mcp() -> str:
             response.raise_for_status()
             return response.text
     except Exception as e:
-        return f"Failed to load SKILL-MCP.md: {str(e)}"
+        logger.error(f"Failed to load SKILL-MCP.md: {str(e)}")
+        return "Failed to load SKILL-MCP.md documentation."
 
 
 # ================== TOOLS ==================
