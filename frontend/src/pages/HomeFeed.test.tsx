@@ -53,16 +53,34 @@ describe('HomeFeed Integration', () => {
     
     // Check for follow buttons (creators)
     expect(screen.getByText('creator1')).toBeInTheDocument();
-    expect(screen.getByText('All Updates')).toBeInTheDocument();
+    expect(screen.getByText('Global')).toBeInTheDocument();
+    expect(screen.getByText('Following')).toBeInTheDocument();
   });
 
-  it('shows empty state when no nodes are found', async () => {
+  it('shows empty state when no nodes are found and no follows exist', async () => {
     server.use(
       http.get(`${API_BASE_URL}/social-api/home-feed/0`, () => {
         return HttpResponse.json({ nodes: [], nextPage: null });
       }),
       http.get(`${API_BASE_URL}/social-api/follows/`, () => {
         return HttpResponse.json([]);
+      })
+    );
+
+    renderWithProviders(<HomeFeed />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/You aren't following anyone yet/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows empty state when no nodes are found for existing follows', async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/social-api/home-feed/0`, () => {
+        return HttpResponse.json({ nodes: [], nextPage: null });
+      }),
+      http.get(`${API_BASE_URL}/social-api/follows/`, () => {
+        return HttpResponse.json([{ id: 2, username: 'creator1', avatar: null }]);
       })
     );
 
