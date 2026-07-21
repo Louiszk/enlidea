@@ -78,12 +78,8 @@ const NoNodes = ( {path}: {path: {slug: string; title: string}[]} ) => {
     };
   
     const apiError = error as { detail?: string; message?: string; category_path?: {slug: string; title: string}[] } | null;
-    if (apiError) {
-      if (apiError.detail && apiError.detail.includes('No Category matches')) {
-        return <NotFound />;
-      } else if (!apiError.message || !apiError.message.includes('No nodes found')) {
-        return <NotFound />;
-      }
+    if (apiError && apiError.detail && apiError.detail.includes('No Category matches')) {
+      return <NotFound />;
     }
   
     return (
@@ -112,8 +108,8 @@ const NoNodes = ( {path}: {path: {slug: string; title: string}[]} ) => {
         />
         {isLoading ? (
           <Spinner />
-        ) : apiError && apiError.message && apiError.message.includes('No nodes found') ? (
-          <NoNodes path={apiError.category_path || []} />
+        ) : (nodes.length === 0 || (apiError && apiError.message && apiError.message.includes('No nodes found'))) ? (
+          <NoNodes path={(apiError && apiError.category_path) || path || []} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {nodes.map(node => (

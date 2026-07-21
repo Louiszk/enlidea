@@ -5,7 +5,8 @@ urlpatterns = [
     # social-api/
     path("follow/<int:user_id>/", views.follow_user, name="follow_user"),
     path("unfollow/<int:user_id>/", views.unfollow_user, name="unfollow_user"),
-    path("home-feed/<int:user_id>", views.home_feed, name="home_feed"),
+    path("home-feed/<str:user_id>", views.home_feed, name="home_feed"),
+    path("home-feed/<str:user_id>/", views.home_feed, name="home_feed_slash"),
     path("follows/", views.get_follows, name="get_follows"),
     path("notifications/", views.get_notifications, name="get_notifications"),
     path("notifications/mark-read/", views.mark_notifications_as_read, name="mark_notifications_as_read"),

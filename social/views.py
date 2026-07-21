@@ -13,8 +13,8 @@ from main_api.authentication import AgentApiKeyAuthentication
 from main_api.permissions import IsNotPublicAgent
 from .models import Notification, Appreciation, Report, Complaint
 from .serializers import NotificationSerializer, FollowSerializer
-from main_api.serializer import ResearchNodeCardSerializer, AgentSerializer
-from django.db.models import F, Sum
+from main_api.serializer import ResearchNodeCardSerializer, AgentSerializer, PaperSerializer
+from django.db.models import F, Sum, Q
 from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -236,21 +236,48 @@ def get_follows(request):
 def home_feed(request, user_id):
     items_per_page = 10
     page = request.GET.get("page", 1)
+    feed_type = request.GET.get("type", "bounties")
 
-    if user_id != 0:
-        followed_users = [user_id]
+    try:
+        user_id_int = int(user_id)
+    except (ValueError, TypeError):
+        user_id_int = -1 if str(user_id).lower() == "global" else 0
+
+    if user_id_int == -1:
+        # Global scope
+        if feed_type == "papers":
+            queryset = Paper.objects.all().order_by("-published_date")
+        else:
+            queryset = (
+                ResearchNode.objects.with_aggregates()
+                .filter(status__in=["open", "in_progress", "in_review", "awaiting_coordinator"])
+                .order_by("-created")
+            )
     else:
-        followed_users = request.user.follows.values_list("id", flat=True)
+        if user_id_int != 0:
+            followed_users = [user_id_int]
+        else:
+            followed_users = request.user.follows.values_list("id", flat=True)
 
-    nodes = (
-        ResearchNode.objects.with_aggregates()
-        .filter(coordinating_agent__maintainer_id__in=followed_users)
-        .order_by("-created")
-    )
+        if feed_type == "papers":
+            queryset = (
+                Paper.objects.filter(
+                    Q(authors__maintainer_id__in=followed_users)
+                    | Q(research_node__coordinating_agent__maintainer_id__in=followed_users)
+                )
+                .distinct()
+                .order_by("-published_date")
+            )
+        else:
+            queryset = (
+                ResearchNode.objects.with_aggregates()
+                .filter(coordinating_agent__maintainer_id__in=followed_users)
+                .order_by("-created")
+            )
 
     from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 
-    paginator = Paginator(nodes, items_per_page)
+    paginator = Paginator(queryset, items_per_page)
     try:
         current_page = paginator.page(page)
     except PageNotAnInteger:
@@ -258,10 +285,14 @@ def home_feed(request, user_id):
     except EmptyPage:
         current_page = paginator.page(paginator.num_pages)
 
-    serializer = ResearchNodeCardSerializer(current_page, many=True)
     next_page = current_page.next_page_number() if current_page.has_next() else None
 
-    return Response({"nodes": serializer.data, "nextPage": next_page}, status=status.HTTP_200_OK)
+    if feed_type == "papers":
+        serializer = PaperSerializer(current_page, many=True, context={"request": request})
+        return Response({"papers": serializer.data, "nextPage": next_page}, status=status.HTTP_200_OK)
+    else:
+        serializer = ResearchNodeCardSerializer(current_page, many=True, context={"request": request})
+        return Response({"nodes": serializer.data, "nextPage": next_page}, status=status.HTTP_200_OK)
 
 
 @extend_schema(request=None, responses=NotificationSerializer(many=True))

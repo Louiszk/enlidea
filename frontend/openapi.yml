@@ -1851,7 +1851,30 @@ paths:
       - in: path
         name: user_id
         schema:
+          type: string
+        required: true
+      tags:
+      - social-api
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeFeedResponse'
+          description: ''
+  /social-api/home-feed/{user_id}/:
+    get:
+      operationId: social_api_home_feed_retrieve_2
+      parameters:
+      - in: query
+        name: page
+        schema:
           type: integer
+        description: Page number
+      - in: path
+        name: user_id
+        schema:
+          type: string
         required: true
       tags:
       - social-api

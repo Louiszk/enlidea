@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { getHomeFeed, getFollows } from '../services/socialService';
-import { fetchPapers } from '../services/fetchService';
+
 import NodeCard from '../components/NodeCard';
 import PaperCard from '../components/PaperCard';
 import { ShimmerCard } from '../components/ShimmerSection';
@@ -38,13 +38,12 @@ const HomeFeed = () => {
     fetchNextPage: fetchNextNodes,
     hasNextPage: hasNextNodes,
     isLoading: isNodesLoading,
-    isError: isNodesError,
-    error: nodesError
+    isError: isNodesError
   } = useInfiniteQuery({
-    queryKey: ['homeFeed', selectedUser],
-    queryFn: ({ pageParam = 1 }) => getHomeFeed(String(selectedUser), pageParam as number),
+    queryKey: ['homeFeed', selectedUser, 'bounties'],
+    queryFn: ({ pageParam = 1 }) => getHomeFeed(String(selectedUser), pageParam as number, 'bounties'),
     initialPageParam: 1,
-    getNextPageParam: (lastPage: HomeFeedResponse) => lastPage.nextPage ?? undefined,
+    getNextPageParam: (lastPage: HomeFeedResponse | PaperListResponse) => lastPage.nextPage ?? undefined,
     enabled: !!user && feedType === 'bounties'
   });
 
@@ -53,18 +52,17 @@ const HomeFeed = () => {
     fetchNextPage: fetchNextPapers,
     hasNextPage: hasNextPapers,
     isLoading: isPapersLoading,
-    isError: isPapersError,
-    error: papersError
+    isError: isPapersError
   } = useInfiniteQuery({
-    queryKey: ['papersFeed'],
-    queryFn: ({ pageParam = 1 }) => fetchPapers(pageParam as number),
+    queryKey: ['homeFeed', selectedUser, 'papers'],
+    queryFn: ({ pageParam = 1 }) => getHomeFeed(String(selectedUser), pageParam as number, 'papers'),
     initialPageParam: 1,
-    getNextPageParam: (lastPage: PaperListResponse) => lastPage.nextPage ?? undefined,
+    getNextPageParam: (lastPage: HomeFeedResponse | PaperListResponse) => lastPage.nextPage ?? undefined,
     enabled: !!user && feedType === 'papers'
   });
 
   const handleUserClick = (userId: number) => {
-    if (selectedUser === userId && userId !== 0) {
+    if (selectedUser === userId && userId !== 0 && userId !== -1) {
       navigate(`/user/${userId}`);
     } else {
       setSelectedUser(userId);
@@ -72,8 +70,8 @@ const HomeFeed = () => {
   };
 
   const items = feedType === 'bounties' 
-    ? (nodeData?.pages.flatMap(page => page.nodes) || [])
-    : (paperData?.pages.flatMap(page => page.papers || []) || []);
+    ? (nodeData?.pages.flatMap(page => ('nodes' in page ? page.nodes : [])) || [])
+    : (paperData?.pages.flatMap(page => ('papers' in page ? (page.papers || []) : [])) || []);
 
   const renderItem = useCallback((item: ResearchNodeCard | Paper | null, index: number) => {
     if (!item) {
@@ -111,8 +109,8 @@ const HomeFeed = () => {
     return <NotFound />;
   }
 
-  if (isNodesError || isPapersError || followsError) {
-    return <Error message={nodesError?.message || papersError?.message || followsError?.message} />;
+  if (followsError) {
+    return <Error message={followsError?.message} />;
   }
 
   return (
@@ -139,14 +137,19 @@ const HomeFeed = () => {
         </div>
       </div>
       
-      {/* Follows section - only show for bounties for now as papers are global */}
-      {feedType === 'bounties' && (
+      {/* Scope and Follows filter row for both Bounties and Papers */}
       <div className="mb-8 overflow-x-auto whitespace-nowrap pb-4 flex items-center gap-4 no-scrollbar">
+        <button 
+          onClick={() => handleUserClick(-1)} 
+          className={`flex-shrink-0 px-6 py-3 rounded-xl font-bold border-2 transition-all duration-200 ${selectedUser === -1 ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'}`}
+        >
+          Global
+        </button>
         <button 
           onClick={() => handleUserClick(0)} 
           className={`flex-shrink-0 px-6 py-3 rounded-xl font-bold border-2 transition-all duration-200 ${selectedUser === 0 ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'}`}
         >
-          All Updates
+          Following
         </button>
         {followsData?.map(follow => (
           <button
@@ -163,19 +166,41 @@ const HomeFeed = () => {
           </button>
         ))}
       </div>
-      )}
 
       {(isNodesLoading || isPapersLoading || isFollowsLoading) ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => <ShimmerCard key={i} />)}
         </div>
-      ) : items.length === 0 ? (
+      ) : (items.length === 0 || isNodesError || isPapersError) ? (
         <div className="flex flex-col items-center justify-center py-20 bg-zinc-800/50 rounded-2xl border border-dashed border-zinc-700">
-          <p className='font-bold text-2xl text-zinc-300 mb-2'>No updates found.</p>
-          <p className='text-zinc-500 mb-6'>No {feedType === 'bounties' ? 'active bounties' : 'published papers'} found at the moment.</p>
-          <Link to="/leaderboard" className='bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-bold transition-all'>
-            Explore Network
-          </Link>
+          <p className='font-bold text-2xl text-zinc-300 mb-2'>
+            {selectedUser === 0 && followsData.length === 0 
+              ? "You aren't following anyone yet." 
+              : selectedUser === -1
+              ? "No global updates found."
+              : "No updates found."}
+          </p>
+          <p className='text-zinc-500 mb-6 text-center max-w-md'>
+            {selectedUser === 0 && followsData.length === 0 
+              ? `You are viewing your Following feed, but don't follow any maintainers yet. Switch to Global or explore the network!`
+              : selectedUser === -1
+              ? `There are currently no ${feedType === 'bounties' ? 'active bounties' : 'published papers'} across the global Enlidea network right now.`
+              : `No ${feedType === 'bounties' ? 'active bounties' : 'published papers'} found for this scope at the moment.`}
+          </p>
+          {selectedUser === 0 && followsData.length === 0 ? (
+            <div className="flex gap-4">
+              <button onClick={() => setSelectedUser(-1)} className='bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-bold transition-all'>
+                Switch to Global
+              </button>
+              <Link to="/leaderboard" className='bg-zinc-700 hover:bg-zinc-600 text-white px-6 py-2.5 rounded-lg font-bold transition-all'>
+                Explore Network
+              </Link>
+            </div>
+          ) : (
+            <Link to="/leaderboard" className='bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-bold transition-all'>
+              Explore Network
+            </Link>
+          )}
         </div>
       ) : (
         <VirtualizedList

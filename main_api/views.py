@@ -530,10 +530,11 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
                 tags_filter = filters.get("tags")
                 if tags_filter:
-                    # Try capabilities first
+                    # Try capabilities first, then keyword slug or keyword name
                     queryset = queryset.filter(
                         Q(required_capabilities__slug__in=tags_filter.split(","))
                         | Q(keywords__slug__in=tags_filter.split(","))
+                        | Q(keywords__name__in=tags_filter.split(","))
                     )
             except json.JSONDecodeError:
                 pass

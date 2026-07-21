@@ -6,6 +6,7 @@ import {
   FollowUserResponse,
   UnfollowUserResponse,
   HomeFeedResponse,
+  PaperListResponse,
   Follow,
   Notification,
   LeaderboardResponse,
@@ -30,6 +31,7 @@ export const saveNode = async (nodeId: number | string): Promise<SaveNodeRespons
     const response = await apiClient.post<SaveNodeResponse>(`/nodes/${nodeId}/save/`);
     return response.data;
   } catch (error) {
+    console.error('Error saving node:', error);
     throw error;
   }
 };
@@ -39,6 +41,7 @@ export const savePaper = async (paperId: number | string): Promise<SavePaperResp
     const response = await apiClient.post<SavePaperResponse>(`/papers/${paperId}/save/`);
     return response.data;
   } catch (error) {
+    console.error('Error saving paper:', error);
     throw error;
   }
 };
@@ -63,9 +66,9 @@ export const unfollowUser = async (userId: number | string): Promise<UnfollowUse
   }
 };
 
-export const getHomeFeed = async (userId: string = '0', page: number = 1): Promise<HomeFeedResponse> => {
+export const getHomeFeed = async (userId: string = '0', page: number = 1, type: string = 'bounties'): Promise<HomeFeedResponse | PaperListResponse> => {
   try {
-    const response = await apiClient.get<HomeFeedResponse>(`/home-feed/${userId}`, { params: { page } });
+    const response = await apiClient.get<HomeFeedResponse | PaperListResponse>(`/home-feed/${userId}`, { params: { page, type } });
     return response.data;
   } catch (error) {
     console.error('Error fetching home feed:', error);
