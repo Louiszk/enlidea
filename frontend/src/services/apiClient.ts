@@ -1,7 +1,33 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-export const MCP_BASE_URL = import.meta.env.VITE_MCP_URL || 'http://localhost:8001';
+const getEnvVar = (
+  value: string | undefined,
+  name: string,
+  devFallback: string,
+): string => {
+  if (value !== undefined) return value;
+
+  if (import.meta.env.PROD) {
+    throw new Error(`${name} is required in production builds.`);
+  }
+
+  return devFallback;
+};
+
+export const API_BASE_URL = getEnvVar(
+  import.meta.env.VITE_API_BASE_URL,
+  'VITE_API_BASE_URL',
+  'http://localhost:8000',
+);
+
+export const MCP_BASE_URL = getEnvVar(
+  import.meta.env.VITE_MCP_URL,
+  'VITE_MCP_URL',
+  typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8001',
+);
+
+
+
 
 // State variables to prevent multiple simultaneous refresh requests
 let isRefreshing = false;
@@ -94,10 +120,12 @@ const createAxiosInstance = (baseURL: string) => {
 export const getMediaUrl = (path: string | null | undefined) => {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  return `${API_BASE_URL}${path}`;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return API_BASE_URL ? `${API_BASE_URL}${cleanPath}` : cleanPath;
 };
 
 export const baseApiClient = createAxiosInstance(API_BASE_URL);
-export const socialApiClient = createAxiosInstance(`${API_BASE_URL}/social-api`);
-export const authApiClient = createAxiosInstance(`${API_BASE_URL}/auth-api`);
-export const apiClient = createAxiosInstance(`${API_BASE_URL}/api`);
+export const socialApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/social-api` : '/social-api');
+export const authApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/auth-api` : '/auth-api');
+export const apiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/api` : '/api');
+

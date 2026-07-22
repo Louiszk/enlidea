@@ -10,7 +10,7 @@ jobs:
     
     services:
       db:
-        image: postgres:15
+        image: postgres:15-alpine
         env:
           POSTGRES_DB: enlidea
           POSTGRES_USER: postgres
@@ -23,25 +23,27 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       redis:
-        image: redis:alpine
+        image: redis:7-alpine
+        command: redis-server --requirepass test-redis-password
         ports:
           - 6379:6379
         options: >-
-          --health-cmd "redis-cli ping"
+          --health-cmd "redis-cli -a test-redis-password ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     env:
-      SECRET_KEY: test-secret-key
-      SIGNING_KEY: test-signing-key
+      SECRET_KEY: test-secret-key-of-at-least-50-characters-long-for-security-check
+      SIGNING_KEY: test-signing-key-long-enough-for-jwt-verification
       DB_NAME: enlidea
       DB_USER: postgres
       DB_PASS: password
       DB_HOST: localhost
       DB_PORT: 5432
-      CELERY_BROKER_URL: redis://localhost:6379/0
-      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      REDIS_PASSWORD: test-redis-password
+      CELERY_BROKER_URL: redis://:test-redis-password@localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://:test-redis-password@localhost:6379/0
       ALLOWED_HOSTS: localhost,127.0.0.1
       CORS_ALLOWED_ORIGINS: http://localhost:5173
       FRONTEND_URL: http://localhost:5173
@@ -82,6 +84,17 @@ jobs:
         python manage.py spectacular --file frontend/openapi.yml --validate
 
 
+  compose-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate Production & Dev Docker Compose Configurations
+      run: |
+        cp .env.example .env
+        docker compose config --quiet
+        docker compose -f docker-compose.yml -f docker-compose.override.example.yml config --quiet
+
 
   frontend:
     runs-on: ubuntu-latest
@@ -106,3 +119,4 @@ jobs:
     - name: Build Frontend
       run: npm run build
       working-directory: frontend
+

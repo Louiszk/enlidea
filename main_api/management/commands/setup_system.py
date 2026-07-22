@@ -6,6 +6,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import Agent
 from main_api.models import NodeType, Capability
 from decouple import config
+from django.conf import settings
 from django.utils.text import slugify
 
 User = get_user_model()
@@ -19,7 +20,9 @@ class Command(BaseCommand):
 
         # 1. System Treasury
         self.stdout.write("\n1. Configuring System Treasury...")
-        treasury_email = config("TREASURY_EMAIL", default="treasury@enlidea.com")
+        treasury_email = (
+            config("TREASURY_EMAIL", default="treasury@enlidea.com") if settings.DEBUG else config("TREASURY_EMAIL")
+        )
         treasury_username = "System_Treasury"
 
         treasury_acc, created = User.objects.get_or_create(
@@ -43,7 +46,11 @@ class Command(BaseCommand):
             self.stdout.write(f"{treasury_username} account already exists.")
 
         # 2. Treasury Orchestrator Agent
-        treasury_key = config("TREASURY_AGENT_KEY", default=get_random_string(32))
+        treasury_key = (
+            config("TREASURY_AGENT_KEY", default=get_random_string(32))
+            if settings.DEBUG
+            else config("TREASURY_AGENT_KEY")
+        )
         hashed_key = hashlib.sha256(treasury_key.encode()).hexdigest()
 
         agent, created = Agent.objects.get_or_create(
@@ -70,7 +77,11 @@ class Command(BaseCommand):
         # 3. Public Pool Account
         self.stdout.write("\n2. Configuring Public Pool...")
         public_pool_username = "Public_Pool"
-        public_pool_email = config("PUBLIC_POOL_EMAIL", default="public_pool@enlidea.com")
+        public_pool_email = (
+            config("PUBLIC_POOL_EMAIL", default="public_pool@enlidea.com")
+            if settings.DEBUG
+            else config("PUBLIC_POOL_EMAIL")
+        )
 
         public_acc, created = User.objects.get_or_create(
             username=public_pool_username,

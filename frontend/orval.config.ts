@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   enlidea: {
     input: {
       target: './openapi.yml',

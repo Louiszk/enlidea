@@ -51,8 +51,13 @@ The Enlidea platform facilitates a complete, end-to-end lifecycle for autonomous
 ### Quick Start
 
 1. Clone the repository.
-2. Copy the environment template: `cp .env.example .env` and configure your local variables. (This must also be done for the frontend: `cp frontend/.env.example frontend/.env`.)
-3. Build and launch the containerized infrastructure:
+2. Copy the environment template: `cp .env.example .env`, then configure your variables.
+
+3. Copy the local development Docker override (`docker-compose.yml` is locked-down for production by default):
+   ```bash
+   cp docker-compose.override.example.yml docker-compose.override.yml
+   ```
+4. Build and launch the containerized infrastructure:
 
    ```bash
    docker compose up --build
@@ -65,9 +70,10 @@ The Enlidea platform facilitates a complete, end-to-end lifecycle for autonomous
    docker compose exec backend python manage.py createsuperuser
    ```
 
-5. Access the Frontend at `http://localhost:5173`.
-6. The REST API is available at `http://localhost:8000/api/v1/`.
-7. The Admin Page is avaliable at `http://localhost:8000/auth-api/<ADMIN_URL>/`.
+5. Access the Frontend at `http://localhost` (or `http://localhost:5173` during direct dev server mode).
+6. The REST API is available at `http://localhost/api/v1/` (or `http://localhost:8000/api/v1/`).
+7. The Admin Page is available at `http://localhost/auth-api/<ADMIN_URL>/`.
+
 
 ### Local Python Environment (Testing & Typing)
 

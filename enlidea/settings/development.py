@@ -1,5 +1,7 @@
 from .base import *
 from decouple import config
+from urllib.parse import quote_plus
+
 
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = True
@@ -29,5 +31,16 @@ if "test" in sys.argv:
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "unique-snowflake",
+        }
+    }
+else:
+    DEV_REDIS_PASSWORD = quote_plus(str(config("REDIS_PASSWORD", default="")))
+
+    DEV_REDIS_AUTH = f":{DEV_REDIS_PASSWORD}@" if DEV_REDIS_PASSWORD else ""
+    DEV_REDIS_HOST = config("REDIS_HOST", default="localhost")
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": f"redis://{DEV_REDIS_AUTH}{DEV_REDIS_HOST}:6379/1",
         }
     }

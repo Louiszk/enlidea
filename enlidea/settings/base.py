@@ -23,7 +23,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 # Application definition
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv())
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv(), default="localhost")
+
 
 INSTALLED_APPS = [
     "accounts",
@@ -167,12 +168,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": "redis://redis:6379/1",
-    }
-}
 
 SITE_ID = 1
 
@@ -225,9 +220,7 @@ CELERY_BEAT_SCHEDULE = {
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
+STATICFILES_DIRS = [d for d in [BASE_DIR / "static"] if d.exists()]
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"

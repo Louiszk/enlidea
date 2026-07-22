@@ -1,32 +1,50 @@
 services:
   db:
     image: postgres:15-alpine
+    pull_policy: if_not_present
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:?Variable DB_USER is required.}
+      POSTGRES_PASSWORD: ${DB_PASS:?Variable DB_PASS is required.}
+      POSTGRES_DB: ${DB_NAME:?Variable DB_NAME is required.}
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
-    # Add this healthcheck block:
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:?DB_USER is required.} -d ${DB_NAME:?DB_NAME is required.}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  backend:
-    image: enlidea-backend:latest
+  migrate:
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.0.0}
     build:
       context: .
-    ports:
-      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python manage.py migrate --noinput
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER:?Variable DB_USER required}:${DB_PASS:?Variable DB_PASS required}@db:${DB_PORT:-5432}/${DB_NAME:?Variable DB_NAME required}}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:?Variable DJANGO_SETTINGS_MODULE is required.}
+    restart: "no"
+
+  backend:
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.0.0}
+    build:
+      context: .
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "python manage.py migrate && gunicorn enlidea.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+      migrate:
+        condition: service_completed_successfully
+    command: gunicorn enlidea.wsgi:application --bind 0.0.0.0:8000 --workers 3
     env_file:
       - .env
     volumes:
@@ -34,26 +52,26 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER}:${DB_PASS}@db:${DB_PORT:-5432}/${DB_NAME}}
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_HOST: redis
+      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER:?Variable DB_USER required}:${DB_PASS:?Variable DB_PASS required}@db:${DB_PORT:-5432}/${DB_NAME:?Variable DB_NAME required}}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:?Variable DJANGO_SETTINGS_MODULE is required.}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
     restart: unless-stopped
 
   redis:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
+    image: redis:7-alpine
+    pull_policy: if_not_present
+    command: redis-server --requirepass ${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}
     restart: unless-stopped
-    # Add this healthcheck block:
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   celery_worker:
-    image: enlidea-backend:latest
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.0.0}
     build:
       context: .
     depends_on:
@@ -61,7 +79,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "celery -A enlidea worker -l info"
+      migrate:
+        condition: service_completed_successfully
+    command: celery -A enlidea worker -l info
     env_file:
       - .env
     volumes:
@@ -69,14 +89,15 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER}:${DB_PASS}@db:${DB_PORT:-5432}/${DB_NAME}}
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_HOST: redis
+      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER:?Variable DB_USER required}:${DB_PASS:?Variable DB_PASS required}@db:${DB_PORT:-5432}/${DB_NAME:?Variable DB_NAME required}}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:?Variable DJANGO_SETTINGS_MODULE is required.}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
     restart: unless-stopped
 
   celery_beat:
-    image: enlidea-backend:latest
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.0.0}
     build:
       context: .
     depends_on:
@@ -84,28 +105,37 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "celery -A enlidea beat -l info"
+      migrate:
+        condition: service_completed_successfully
+    command: celery -A enlidea beat -l info
     env_file:
       - .env
+    volumes:
+      - media_data:/app/media
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER}:${DB_PASS}@db:${DB_PORT:-5432}/${DB_NAME}}
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_HOST: redis
+      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER:?Variable DB_USER required}:${DB_PASS:?Variable DB_PASS required}@db:${DB_PORT:-5432}/${DB_NAME:?Variable DB_NAME required}}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:?Variable DJANGO_SETTINGS_MODULE is required.}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
     restart: unless-stopped
 
   frontend:
+    image: ${FRONTEND_IMAGE:-enlidea-frontend:1.0.0}
     build:
       context: ./frontend
-    ports:
-      - "5173:5173"
+      target: prod
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL?Variable VITE_API_BASE_URL is required in .env when building frontend for production.}
+        - VITE_MCP_URL=${VITE_MCP_URL?Variable VITE_MCP_URL is required in .env when building frontend for production.}
     env_file:
       - .env
     restart: unless-stopped
 
   mcp:
+    image: ${MCP_IMAGE:-enlidea-mcp:1.0.0}
     build:
       context: ./mcp_server
     depends_on:
@@ -113,7 +143,8 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.26-alpine
+    pull_policy: if_not_present
     ports:
       - "80:80"
       - "8001:8001"
@@ -122,6 +153,8 @@ services:
       - media_data:/var/www/media:ro
     depends_on:
       - mcp
+      - frontend
+      - backend
     restart: unless-stopped
 
 volumes:
