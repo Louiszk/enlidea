@@ -28,8 +28,8 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
     }
     const normalizedUri = uri.trim();
 
-    // Return as-is if it's already an absolute external URL, data URI, mailto, or tel
-    if (normalizedUri.startsWith('http://') || normalizedUri.startsWith('https://') || normalizedUri.startsWith('data:') || normalizedUri.startsWith('mailto:') || normalizedUri.startsWith('tel:')) {
+    // Return as-is if it's already an absolute external URL, image data URI, mailto, or tel
+    if (normalizedUri.startsWith('http://') || normalizedUri.startsWith('https://') || normalizedUri.startsWith('data:image/') || normalizedUri.startsWith('mailto:') || normalizedUri.startsWith('tel:')) {
       return normalizedUri;
     }
 

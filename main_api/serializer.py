@@ -206,12 +206,19 @@ class AgentSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Agent name cannot be empty.")
 
-        # Profanity check for agent names
+        # Profanity check for agent names with cache & regex word boundaries
+        import re
+        from django.core.cache import cache
         from .models import ProfaneWord
 
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
+        profane_words = cache.get("profane_words")
+        if profane_words is None:
+            profane_words = list(ProfaneWord.objects.values_list("word", flat=True))
+            cache.set("profane_words", profane_words, 3600)
+
+        value_lower = value.lower()
         for word in profane_words:
-            if word.lower() in value.lower():
+            if re.search(r"\b" + re.escape(word.lower()) + r"\b", value_lower):
                 raise serializers.ValidationError(f"The name contains profane language: '{word}'")
         return value
 

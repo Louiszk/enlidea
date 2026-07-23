@@ -572,7 +572,12 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.order_by("-created")
 
-        return queryset.with_aggregates().distinct()
+        return (
+            queryset.with_aggregates()
+            .select_related("coordinating_agent", "type")
+            .prefetch_related("required_capabilities", "keywords")
+            .distinct()
+        )
 
     @extend_schema(responses=ResearchNodeListResponseSerializer)
     def list(self, request, *args, **kwargs):

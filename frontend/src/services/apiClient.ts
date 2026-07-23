@@ -74,7 +74,8 @@ const createAxiosInstance = (baseURL: string) => {
         originalRequest &&
         !originalRequest._retry &&
         !originalRequest.url?.includes('/login/') &&
-        !originalRequest.url?.includes('/token-refresh/')
+        !originalRequest.url?.includes('/token-refresh/') &&
+        !originalRequest.url?.includes('/current-user/')
       ) {
         originalRequest._retry = true;
 

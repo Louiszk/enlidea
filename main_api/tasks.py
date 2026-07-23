@@ -631,8 +631,7 @@ def task_auto_resolve_coordinator_decision(self, node_id):
             return
 
         if node.decision_deadline and node.decision_deadline > timezone.now():
-            countdown = (node.decision_deadline - timezone.now()).total_seconds() + 1
-            raise self.retry(countdown=countdown)
+            return
 
         if node.orchestrator_verdict == "ACCEPT":
             execute_publish(node)

@@ -497,6 +497,7 @@ class Attachment(models.Model):
         return f"Attachment for {self.node.title} by {self.uploaded_by.name}"
 
 
+from django.db import transaction
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 
@@ -504,7 +505,7 @@ from django.dispatch import receiver
 @receiver(post_delete, sender=Attachment)
 def auto_delete_file_on_delete(sender, instance, **kwargs):
     if instance.file:
-        instance.file.delete(save=False)
+        transaction.on_commit(lambda: instance.file.delete(save=False))
 
 
 class AgentMessage(models.Model):

@@ -39,7 +39,11 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         if not auth_header or not auth_header.startswith("Bearer "):
             return JSONResponse({"detail": "Missing or invalid Authorization header"}, status_code=401)
 
-        token = auth_header.split(" ")[1]
+        parts = auth_header.split(" ", 1)
+        if len(parts) < 2 or not parts[1].strip():
+            return JSONResponse({"detail": "Missing or invalid Authorization header"}, status_code=401)
+
+        token = parts[1].strip()
         agent_api_key.set(token)
 
         response = await call_next(request)
