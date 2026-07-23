@@ -1,4 +1,5 @@
 import io
+import uuid
 import requests
 import logging
 import posixpath
@@ -13,6 +14,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from markdown_it import MarkdownIt
+from PIL import Image
 
 from .models import ResearchNode, Bid, ResearchKeyword
 from accounts.models import Agent
@@ -85,6 +87,106 @@ def download_remote_file(url, max_size_bytes, allowed_extensions=None):
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to download file from remote URL: {str(e)}")
         raise ValidationError("Failed to download file from the remote URL.")
+
+
+MAX_IMAGE_PIXELS = 10_000_000
+ALLOWED_IMAGE_FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp", "GIF": ".gif"}
+ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
+DISALLOWED_EXTENSIONS = {".html", ".htm", ".svg", ".php", ".js", ".exe", ".sh", ".py", ".pl"}
+
+
+def process_and_validate_attachment_image(file_obj, max_size_bytes=2 * 1024 * 1024):
+    """
+    Validates, decodes, sanitizes, and re-encodes uploaded images for attachments.
+    Enforces a 2MB size limit, MIME/extension allowlists, Pillow format verification,
+    decompression bomb prevention, and generates a secure server-side filename.
+    """
+    if not file_obj:
+        raise ValidationError("No file provided.")
+
+    # 1. Enforce size limit
+    file_size = getattr(file_obj, "size", None)
+    if file_size is not None and file_size > max_size_bytes:
+        raise ValidationError(f"File size exceeds the limit of {max_size_bytes / (1024 * 1024):.1f}MB.")
+
+    try:
+        if hasattr(file_obj, "chunks"):
+            file_bytes = b"".join(chunk for chunk in file_obj.chunks(chunk_size=65536))
+        elif hasattr(file_obj, "read"):
+            file_bytes = file_obj.read()
+            if hasattr(file_obj, "seek"):
+                file_obj.seek(0)
+        else:
+            file_bytes = bytes(file_obj)
+    except Exception as e:
+        raise ValidationError(f"Failed to read upload stream: {str(e)}")
+
+    if len(file_bytes) > max_size_bytes:
+        raise ValidationError(f"File size exceeds the limit of {max_size_bytes / (1024 * 1024):.1f}MB.")
+
+    if len(file_bytes) == 0:
+        raise ValidationError("Uploaded file is empty.")
+
+    # 2. Check original filename extension if present
+    original_name = getattr(file_obj, "name", "") or ""
+    original_ext = posixpath.splitext(original_name.lower())[1]
+    if original_ext in DISALLOWED_EXTENSIONS or original_ext == ".svg":
+        raise ValidationError(
+            f"Disallowed file extension: '{original_ext}'. Only PNG, JPEG, WebP, and GIF images are permitted."
+        )
+
+    # 3. Check Content-Type if present
+    content_type = getattr(file_obj, "content_type", None)
+    if content_type:
+        content_type = content_type.lower().split(";")[0].strip()
+        if content_type not in ALLOWED_MIME_TYPES:
+            raise ValidationError(f"Invalid Content-Type: '{content_type}'. Must be a supported image MIME type.")
+
+    # 4. Pillow Decoding & Verification
+    orig_max_pixels = Image.MAX_IMAGE_PIXELS
+    try:
+        Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+        image_stream = io.BytesIO(file_bytes)
+
+        with Image.open(image_stream) as img:
+            fmt = img.format
+            if not fmt or fmt.upper() not in ALLOWED_IMAGE_FORMATS:
+                raise ValidationError(f"Unsupported or invalid image format: '{fmt}'.")
+
+            width, height = img.size
+            if width * height > MAX_IMAGE_PIXELS:
+                raise ValidationError("Image dimensions exceed maximum allowed limits (decompression bomb protection).")
+
+            img.load()
+
+            save_fmt = fmt.upper()
+            if save_fmt == "JPEG":
+                if img.mode in ("RGBA", "P", "LA"):
+                    clean_img = img.convert("RGB")
+                else:
+                    clean_img = img
+            else:
+                clean_img = img
+
+            output_buffer = io.BytesIO()
+            clean_img.save(output_buffer, format=save_fmt)
+            output_bytes = output_buffer.getvalue()
+
+    except Image.DecompressionBombError:
+        raise ValidationError("Decompression bomb detected or image dimensions too large.")
+    except ValidationError:
+        raise
+    except Exception as e:
+        logger.error(f"Image validation/decoding error: {str(e)}")
+        raise ValidationError("Invalid or corrupted image data.")
+    finally:
+        Image.MAX_IMAGE_PIXELS = orig_max_pixels
+
+    # 5. Generate secure server-side filename
+    ext = ALLOWED_IMAGE_FORMATS[fmt.upper()]
+    safe_filename = f"{uuid.uuid4().hex}{ext}"
+
+    return ContentFile(output_bytes, name=safe_filename)
 
 
 def create_research_node(agent, validated_data):

@@ -401,7 +401,8 @@ class AgentViewSet(viewsets.ModelViewSet):
 
         # Only broadcast null-agent directives from the agent's own maintainer
         directives_qs = AgentDirective.objects.filter(
-            Q(agent=agent) | Q(agent__isnull=True, maintainer=agent.maintainer), status="pending"
+            Q(agent=agent, maintainer=agent.maintainer) | Q(agent__isnull=True, maintainer=agent.maintainer),
+            status="pending",
         )
 
         nodes_qs = (
@@ -1025,9 +1026,17 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({"detail": "No file or file_url provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # models.ImageField handles the actual content verification via Pillow
+        # Validate, decode with Pillow, re-encode, and generate a safe filename for both direct and remote uploads
+        from .services import process_and_validate_attachment_image
+
         try:
-            attachment = Attachment.objects.create(node=node, file=file_obj, uploaded_by=agent)
+            validated_file = process_and_validate_attachment_image(file_obj, max_size_bytes=2 * 1024 * 1024)
+            attachment = Attachment.objects.create(node=node, file=validated_file, uploaded_by=agent)
+        except ValidationError as e:
+            return Response(
+                {"detail": e.messages[0] if hasattr(e, "messages") else str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as e:
             logger.error(f"Image upload failed: {str(e)}")
             return Response(
@@ -1478,6 +1487,9 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
         return AgentDirective.objects.filter(maintainer=self.request.user)
 
     def perform_create(self, serializer):
+        agent = serializer.validated_data.get("agent")
+        if agent and agent.maintainer != self.request.user:
+            raise PermissionDenied("You cannot issue directives to agents owned by another maintainer.")
         serializer.save(maintainer=self.request.user)
 
     @extend_schema(
@@ -1517,7 +1529,8 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
         if request.method == "GET":
             # Broad commands (agent=None) scoped to maintainer, or specific to this agent
             directives = AgentDirective.objects.filter(
-                Q(agent=agent) | Q(agent__isnull=True, maintainer=agent.maintainer), status="pending"
+                Q(agent=agent, maintainer=agent.maintainer) | Q(agent__isnull=True, maintainer=agent.maintainer),
+                status="pending",
             ).order_by("created_at")
             serializer = self.get_serializer(directives, many=True)
             return Response(serializer.data)
@@ -1529,7 +1542,10 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
 
             with transaction.atomic():
                 try:
-                    directive = AgentDirective.objects.select_for_update().get(id=directive_id)
+                    directive = AgentDirective.objects.select_for_update().get(
+                        id=directive_id,
+                        maintainer=agent.maintainer,
+                    )
                 except AgentDirective.DoesNotExist:
                     return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 

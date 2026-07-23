@@ -142,3 +142,46 @@ class AgentDirectiveTests(APITestCase):
         directive.refresh_from_db()
         self.assertEqual(directive.status, "in_progress")
         self.assertEqual(directive.agent, self.agent)
+
+    def test_maintainer_cannot_issue_directive_to_other_maintainers_agent(self):
+        other_user = User.objects.create_user(
+            email="other@test.com", username="other_maintainer", password="password123"
+        )
+        other_agent = Agent.objects.create(name="OtherAgent", maintainer=other_user, api_key_hash="hash_other")
+
+        self.client.force_authenticate(user=self.maintainer)
+        data = {"agent": other_agent.id, "content": "Unauthorized cross-tenant directive"}
+        response = self.client.post(self.list_url, data)
+        self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN])
+        self.assertEqual(AgentDirective.objects.filter(content="Unauthorized cross-tenant directive").count(), 0)
+
+    def test_agent_cannot_claim_other_maintainers_broadcast_directive(self):
+        other_user = User.objects.create_user(
+            email="other2@test.com", username="other_maintainer2", password="password123"
+        )
+        other_broadcast = AgentDirective.objects.create(
+            maintainer=other_user, agent=None, content="Other tenant broadcast", status="pending"
+        )
+
+        self.client.credentials(HTTP_X_AGENT_API_KEY=self.raw_api_key)
+        data = {"id": other_broadcast.id, "status": "completed", "agent_response": "Malicious claim"}
+        response = self.client.patch(self.sync_url, data)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        other_broadcast.refresh_from_db()
+        self.assertEqual(other_broadcast.status, "pending")
+        self.assertIsNone(other_broadcast.agent)
+
+    def test_agent_cannot_sync_other_maintainers_targeted_directive(self):
+        other_user = User.objects.create_user(
+            email="other3@test.com", username="other_maintainer3", password="password123"
+        )
+        AgentDirective.objects.create(
+            maintainer=other_user, agent=self.agent, content="Forged cross-tenant target", status="pending"
+        )
+
+        self.client.credentials(HTTP_X_AGENT_API_KEY=self.raw_api_key)
+        response = self.client.get(self.sync_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(cast(Any, response.data)), 0)

@@ -454,6 +454,28 @@ class AgentDirectiveSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "maintainer", "agent_response", "status", "created_at", "updated_at"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            user = request.user
+            if hasattr(user, "agents"):
+                self.fields["agent"].queryset = user.agents.all()
+
+    def validate_agent(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            user = request.user
+            if hasattr(user, "agents"):
+                if value.maintainer_id != user.id:
+                    raise serializers.ValidationError("Selected agent does not belong to you.")
+            elif hasattr(user, "maintainer_id"):
+                if value.maintainer_id != user.maintainer_id:
+                    raise serializers.ValidationError("Agent does not belong to the same maintainer.")
+        return value
+
     def validate_content(self, value):
         # Apply strict normalization (NFKC) for directives
         value = sanitize_agent_input(value, apply_nfkc=True)
@@ -887,6 +909,15 @@ class AttachmentSerializer(serializers.ModelSerializer):
         model = Attachment
         fields = ["id", "node", "file", "url", "uploaded_by", "uploaded_by_name", "created_at"]
         read_only_fields = ["id", "node", "uploaded_by", "created_at", "file"]
+
+    def validate_file(self, value):
+        from .services import process_and_validate_attachment_image
+
+        try:
+            return process_and_validate_attachment_image(value)
+        except Exception as e:
+            msg = e.messages[0] if hasattr(e, "messages") else str(e)
+            raise serializers.ValidationError(msg)
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_url(self, obj):

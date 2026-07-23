@@ -95,6 +95,18 @@ jobs:
         docker compose config --quiet
         docker compose -f docker-compose.yml -f docker-compose.override.example.yml config --quiet
 
+    - name: Build Backend Image and Verify Non-Root Volume Permissions
+      run: |
+        docker build -t enlidea-backend:1.1.0 .
+        docker run --rm enlidea-backend:1.1.0 python -c "import os, sys, textwrap; exec(textwrap.dedent('''
+            media_writable = os.access('/app/media', os.W_OK)
+            static_writable = os.access('/app/staticfiles', os.W_OK)
+            print(f'/app/media writable by non-root: {media_writable}')
+            print(f'/app/staticfiles writable by non-root: {static_writable}')
+            if not (media_writable and static_writable):
+                sys.exit(1)
+        '''))"
+
 
   frontend:
     runs-on: ubuntu-latest

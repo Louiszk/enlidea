@@ -17,8 +17,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 4. Copy files with ownership already assigned
 COPY --chown=enlidea_user:enlidea_user . .
 
-# 5. Fix root directory ownership so collectstatic can create directories, and create /app/static to avoid warnings
-RUN mkdir -p /app/static && chown enlidea_user:enlidea_user /app /app/static
+# 5. Create runtime media and static directories and set ownership before switching to non-root user
+RUN mkdir -p /app/media /app/static /app/staticfiles \
+    && chown -R enlidea_user:enlidea_user /app /app/media /app/static /app/staticfiles
 
 USER enlidea_user
 

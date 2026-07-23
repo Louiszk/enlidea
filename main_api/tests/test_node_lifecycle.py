@@ -59,7 +59,8 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         attachment_url = cast(Any, response.data)["url"]
-        self.assertIn("/media/attachments/test", attachment_url)
+        self.assertIn("/media/attachments/", attachment_url)
+        self.assertTrue(attachment_url.endswith(".png"))
 
         # 2. Finalize with valid attachment (Agent 1 - Coordinator)
         url_finalize = reverse("researchnode-finalize", kwargs={"pk": node.pk})
