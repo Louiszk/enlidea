@@ -77,8 +77,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs["new_password1"] != attrs["new_password2"]:
             raise serializers.ValidationError({"new_password2": "Password fields didn't match."})
+        user = self.context.get("user")
         try:
-            validate_password(attrs["new_password1"])
+            validate_password(attrs["new_password1"], user=user)
         except ValidationError as e:
             raise serializers.ValidationError({"new_password1": list(e.messages)})
         return attrs
@@ -125,7 +126,7 @@ class PersonalInformationSerializer(serializers.ModelSerializer):
     def validate_new_password(self, value):
         if value:
             try:
-                validate_password(value)
+                validate_password(value, user=self.instance)
             except ValidationError as e:
                 raise serializers.ValidationError(list(e.messages))
         return value
@@ -136,6 +137,7 @@ class PersonalInformationSerializer(serializers.ModelSerializer):
         new_password = validated_data.get("new_password")
         if new_password:
             instance.set_password(new_password)
+            instance.jwt_token_version += 1
 
         # We'll handle email update in the view
         instance.save()

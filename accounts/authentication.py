@@ -25,6 +25,13 @@ class CookieJWTAuthentication(JWTAuthentication):
     def enforce_csrf(self, request):
         enforce_csrf(request)
 
+    def get_user(self, validated_token):
+        user = super().get_user(validated_token)
+        token_version = validated_token.get("jwt_token_version")
+        if token_version is None or token_version != getattr(user, "jwt_token_version", 0):
+            raise exceptions.AuthenticationFailed("Token has been revoked.", code="token_revoked")
+        return user
+
     def authenticate(self, request):
         header = self.get_header(request)
 
