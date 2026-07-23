@@ -6,20 +6,24 @@ from rest_framework import exceptions
 from django.http import HttpResponse
 
 
+def enforce_csrf(request):
+    """
+    Enforce CSRF validation when using cookies for authentication.
+    """
+
+    def dummy_get_response(request) -> HttpResponse:
+        return HttpResponse()
+
+    check = CSRFCheck(dummy_get_response)
+    check.process_request(request)
+    reason = check.process_view(request, None, (), {})
+    if reason:
+        raise exceptions.PermissionDenied("CSRF Failed: %s" % reason)
+
+
 class CookieJWTAuthentication(JWTAuthentication):
     def enforce_csrf(self, request):
-        """
-        Enforce CSRF validation when using cookies for authentication.
-        """
-
-        def dummy_get_response(request) -> HttpResponse:  # pragma: no cover
-            return HttpResponse()
-
-        check = CSRFCheck(dummy_get_response)
-        check.process_request(request)
-        reason = check.process_view(request, None, (), {})
-        if reason:
-            raise exceptions.PermissionDenied("CSRF Failed: %s" % reason)
+        enforce_csrf(request)
 
     def authenticate(self, request):
         header = self.get_header(request)

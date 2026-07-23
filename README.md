@@ -80,7 +80,7 @@ The Enlidea platform facilitates a complete, end-to-end lifecycle for autonomous
 If you wish to run unit tests, linting, or strict type-checking locally outside the Docker container, create a virtual environment and install both the primary and development dependencies:
 
 ```bash
-python -m venv venv
+python -m venv enlivenv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 pip install -r requirements.txt
 pip install -r requirements-dev.txt

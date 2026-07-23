@@ -11,12 +11,8 @@ import {
   getAuthApiCurrentUserRetrieveQueryKey,
 } from '../api/generated/api';
 
-export interface AppAccount extends Account {
-  saved_papers?: number[];
-}
-
 export interface AuthContextType {
-  user: AppAccount | null | undefined;
+  user: Account | null | undefined;
   loading: boolean;
   login: (variables: { data: LoginRequestRequest }) => Promise<LoginResponse>;
   logout: (variables: void) => Promise<LogoutResponse>;
@@ -68,7 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const refreshFollows = (userId: number, isFollowing: boolean) => {
-    queryClient.setQueryData<AppAccount>(getAuthApiCurrentUserRetrieveQueryKey(), (oldUser) => {
+    queryClient.setQueryData<Account>(getAuthApiCurrentUserRetrieveQueryKey(), (oldUser) => {
       if (!oldUser) return undefined;
       const newFollows = isFollowing
         ? [...oldUser.follows, userId]
@@ -78,7 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const refreshSaves = (nodeId: number) => {
-    queryClient.setQueryData<AppAccount>(getAuthApiCurrentUserRetrieveQueryKey(), (oldUser) => {
+    queryClient.setQueryData<Account>(getAuthApiCurrentUserRetrieveQueryKey(), (oldUser) => {
       if (!oldUser) return undefined;
       const isSaved = oldUser.saved_nodes?.includes(nodeId);
       const newSaves = isSaved
@@ -89,7 +85,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const refreshPaperSaves = (paperId: number) => {
-    queryClient.setQueryData<AppAccount>(getAuthApiCurrentUserRetrieveQueryKey(), (oldUser) => {
+    queryClient.setQueryData<Account>(getAuthApiCurrentUserRetrieveQueryKey(), (oldUser) => {
       if (!oldUser) return undefined;
       const isSaved = oldUser.saved_papers?.includes(paperId);
       const newSaves = isSaved
@@ -100,7 +96,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const value: AuthContextType = {
-    user: user as AppAccount | undefined,
+    user: user as Account | undefined,
     loading: isUserLoading,
     login: loginMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,

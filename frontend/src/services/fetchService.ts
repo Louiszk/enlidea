@@ -79,7 +79,12 @@ export const fetchCapabilityNodes = async (capabilitySlug: string, page: number,
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
-      throw error.response.data;
+      const message = error.response.data?.detail || error.response.data?.message || 'Capability nodes not found';
+      const err = new Error(message);
+      if (typeof error.response.data === 'object' && error.response.data !== null) {
+        Object.assign(err, error.response.data);
+      }
+      throw err;
     }
     throw new Error('Failed to fetch capability nodes');
   }

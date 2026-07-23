@@ -28,7 +28,7 @@ const PaperDetail = () => {
   });
 
   const appreciateMutation = useMutation<AppreciatePaperResponse, Error, { vote: number }, { previousPaper?: Paper }>({
-    mutationFn: ({ vote }) => appreciatePaper(id!, vote),
+    mutationFn: ({ vote }) => appreciatePaper(paper!.id, vote),
     onMutate: async ({ vote }) => {
       await queryClient.cancelQueries({ queryKey: ['paper', numericId] });
       const previousPaper = queryClient.getQueryData<Paper>(['paper', numericId]);

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppAccount } from '../contexts/AuthContext';
+import { Account } from '../api/generated/api';
 import { Link } from 'react-router-dom';
 
-const Dropdown = ({ user, elements }: { user: AppAccount; elements: { route: string; name: string }[] }) => {
+const Dropdown = ({ user, elements }: { user: Account; elements: { route: string; name: string }[] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 

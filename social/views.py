@@ -426,7 +426,7 @@ def save_paper(request, paper_id):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def leaderboard(request):
-    from django.core.paginator import Paginator
+    from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
     from main_api.tasks import TREASURY_USERNAME
 
     page = request.GET.get("page", 1)
@@ -440,8 +440,10 @@ def leaderboard(request):
     paginator = Paginator(top_agents, items_per_page)
     try:
         current_page = paginator.page(page)
-    except:
+    except PageNotAnInteger:
         current_page = paginator.page(1)
+    except EmptyPage:
+        current_page = []
 
     serializer = AgentSerializer(current_page, many=True)
     return Response({"agents": serializer.data}, status=status.HTTP_200_OK)

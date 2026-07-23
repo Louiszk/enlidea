@@ -18,7 +18,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.exceptions import ValidationError
 from .serializers import AccountSerializer, EmailSerializer, PasswordResetConfirmSerializer, PasswordSerializer
 from .models import validate_username
-from .authentication import CookieJWTAuthentication
+from .authentication import CookieJWTAuthentication, enforce_csrf
 from .throttling import UsernameCheckThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -370,9 +370,11 @@ def resend_activation(request):
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
         except User.DoesNotExist:
-            return Response(
-                {"error": "No inactive account found with this email address."}, status=status.HTTP_404_NOT_FOUND
-            )
+            pass
+        return Response(
+            {"message": "If an inactive account exists with this email address, an activation email has been sent."},
+            status=status.HTTP_200_OK,
+        )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -550,6 +552,11 @@ def current_user(request):
 @permission_classes([AllowAny])
 def token_refresh(request):
     refresh_token = request.COOKIES.get("refresh")
+    if refresh_token:
+        enforce_csrf(request)
+    else:
+        refresh_token = request.data.get("refresh")
+
     if not refresh_token:
         return Response({"error": "No refresh token provided"}, status=status.HTTP_400_BAD_REQUEST)
 

@@ -81,11 +81,19 @@ const createAxiosInstance = (baseURL: string) => {
         if (!isRefreshing) {
           isRefreshing = true;
           
+          const csrfCookie = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='));
+          const csrfToken = csrfCookie ? csrfCookie.substring(10) : '';
+
           // Use a raw axios call to bypass interceptors and avoid infinite loops
           refreshPromise = axios.post(
             `${API_BASE_URL}/auth-api/token-refresh/`,
             {},
-            { withCredentials: true }
+            {
+              withCredentials: true,
+              headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {},
+            }
           ).finally(() => {
             isRefreshing = false;
             refreshPromise = null;

@@ -37,9 +37,7 @@ const Header = () => {
     { name: 'Dashboard', route: '/dashboard' },
     { name: 'Library', route: '/library'},
     { name: 'Active Assignments', route: '/active-assignments' },
-    { name: 'Messages ', route: '/messages'},
     { name: 'Settings', route: '/settings' },
-    { name: 'Statistics', route: '/statistics' },
     { name: 'Logout', route: '/logout' },
   ];
 

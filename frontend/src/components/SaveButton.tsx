@@ -3,8 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { saveNode, savePaper } from '../services/socialService';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner, BookmarkIcon } from './Icons';
-import { Paper, ResearchNode } from '../api/generated/api';
-import { AppAccount } from '../contexts/AuthContext';
+import { Paper, ResearchNode, Account } from '../api/generated/api';
 
 export interface SaveButtonProps {
   targetId: number;
@@ -78,7 +77,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({ targetId, targetType = 'node', 
 
   useEffect(() => {
     if (!loading && user) {
-      const typedKey = savedArrayName as keyof AppAccount;
+      const typedKey = savedArrayName as keyof Account;
       const array = user[typedKey] as number[] | undefined;
       if (array) {
         const savedStatus = array.includes(targetId);

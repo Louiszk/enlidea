@@ -41,6 +41,7 @@ class AccountSerializer(serializers.ModelSerializer):
             "balance_blue_stars",
             "balance_orange_stars",
             "saved_nodes",
+            "saved_papers",
         ]
         extra_kwargs = {"password": {"write_only": True}}
         read_only_fields = ["balance_blue_stars", "balance_orange_stars", "is_active", "date_joined", "last_login"]

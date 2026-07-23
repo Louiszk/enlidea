@@ -347,6 +347,8 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
 
     for review in reviews:
         reviewing_agent = review.assigned_reviewer
+        if not reviewing_agent:
+            continue
         # A. Base fee
         updated_rows = Account.objects.filter(username=TREASURY_USERNAME, balance_blue_stars__gte=base_fee).update(
             balance_blue_stars=F("balance_blue_stars") - base_fee

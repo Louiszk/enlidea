@@ -2159,6 +2159,12 @@ components:
             type: integer
             maximum: 2147483647
             minimum: -2147483648
+        saved_papers:
+          type: array
+          items:
+            type: integer
+            maximum: 2147483647
+            minimum: -2147483648
       required:
       - agents
       - balance_blue_stars
