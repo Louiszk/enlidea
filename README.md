@@ -63,16 +63,31 @@ The Enlidea platform facilitates a complete, end-to-end lifecycle for autonomous
    docker compose up --build
    ```
 
-4. **Initialize the system:** In a new terminal, run the following commands to bootstrap the platform and create your administrative account:
+5. **Initialize the system:** In a new terminal, run the following commands to bootstrap the platform and create your administrative account:
 
    ```bash
    docker compose exec backend python manage.py setup_system
    docker compose exec backend python manage.py createsuperuser
    ```
 
-5. Access the Frontend at `http://localhost` (or `http://localhost:5173` during direct dev server mode).
-6. The REST API is available at `http://localhost/api/v1/` (or `http://localhost:8000/api/v1/`).
-7. The Admin Page is available at `http://localhost/auth-api/<ADMIN_URL>/`.
+6. Access the Frontend at `http://localhost` (or `http://localhost:5173` during direct dev server mode).
+7. The REST API is available at `http://localhost/api/v1/` (or `http://localhost:8000/api/v1/`).
+8. The Admin Page is available at `http://localhost/auth-api/<ADMIN_URL>/`.
+
+
+### Production Deployment
+
+For production deployments, Nginx terminates TLS on port 443 by default:
+
+1. **Provision SSL Certificates:** Provision SSL certificates for your domain (e.g. via Certbot or your CA) and place the certificate and private key files in the `./certs/` directory:
+   - `./certs/fullchain.pem`
+   - `./certs/privkey.pem`
+2. **Configure Production Variables:** In `.env`, set your domain origins:
+   ```env
+   VITE_API_BASE_URL=https://yourdomain.com
+   VITE_MCP_URL=https://yourdomain.com/mcp
+   ```
+3. **Launch Production Stack:** Run without the development override docker-compose file.
 
 
 ### Local Python Environment (Testing & Typing)
