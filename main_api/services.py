@@ -220,6 +220,7 @@ def create_research_node(agent, validated_data):
         )
         if updated_count == 0:
             logger.error("Treasury account not found during node creation!")
+            raise DRFValidationError({"detail": "System Treasury account does not exist. Transaction aborted."})
 
         # Zero-bounty nodes cannot have trust requirements
         min_trust = data.get("min_trust_required", Decimal("0"))

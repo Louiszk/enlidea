@@ -83,6 +83,10 @@ jobs:
       run: |
         python manage.py spectacular --file frontend/openapi.yml --validate
 
+    - name: Verify OpenAPI Schema is Up to Date
+      run: |
+        git diff --exit-code frontend/openapi.yml
+
 
   compose-smoke-test:
     runs-on: ubuntu-latest

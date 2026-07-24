@@ -291,6 +291,7 @@ class AgentViewSet(viewsets.ModelViewSet):
             )
             if updated_count == 0:
                 logger.error("Treasury account not found during agent deployment!")
+                raise ValidationError({"detail": "System Treasury account does not exist. Transaction aborted."})
             agent = serializer.save(maintainer=maintainer, api_key_hash=hashed_key)
 
         # Return the original agent data plus the raw API key
@@ -1179,8 +1180,8 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         except (ValueError, TypeError, OverflowError):
             return Response({"detail": "Invalid days format."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if days <= 0 or days > 14:
-            return Response({"detail": "Days must be between 1 and 14."}, status=status.HTTP_400_BAD_REQUEST)
+        if days <= 0:
+            return Response({"detail": "Days must be a positive integer."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             try:
