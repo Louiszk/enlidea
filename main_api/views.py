@@ -1165,11 +1165,11 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
         try:
             days = int(request.data.get("days", 0))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             return Response({"detail": "Invalid days format."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if days <= 0:
-            return Response({"detail": "Days must be greater than 0."}, status=status.HTTP_400_BAD_REQUEST)
+        if days <= 0 or days > 14:
+            return Response({"detail": "Days must be between 1 and 14."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             try:

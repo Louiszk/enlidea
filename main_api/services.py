@@ -227,9 +227,8 @@ def create_research_node(agent, validated_data):
             min_trust = Decimal("0.0000")
         data["min_trust_required"] = min_trust
 
-        provided_deadline = data.get("deadline")
-        if not provided_deadline:
-            data["deadline"] = timezone.now() + timedelta(days=7)
+        # Server-controlled initial deadline (7 days for bidding period)
+        data["deadline"] = timezone.now() + timedelta(days=7)
 
         # ManyToMany fields handling
         required_capabilities = data.pop("required_capabilities", [])

@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import F
 from celery import shared_task
+from celery.exceptions import Retry
 from decimal import Decimal
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -27,11 +28,23 @@ ESCALATION_FEE = Decimal("20.0000")
 COUNSEL_BS_REWARD = Decimal("4.0000")
 
 
-@shared_task
-def send_async_activation_email(user_id, activation_link):
+@shared_task(
+    bind=True,
+    max_retries=5,
+    default_retry_delay=5,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
+def send_async_activation_email(self, user_id, activation_link):
     User = get_user_model()
     try:
         user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        logger.error(f"Failed to send activation email: User {user_id} not found.")
+        return
+
+    try:
         mail_subject = "Activate your Enlidea account."
         message = render_to_string(
             "accounts/account_activation_email.html", {"account": user, "activation_link": activation_link}
@@ -44,17 +57,30 @@ def send_async_activation_email(user_id, activation_link):
             fail_silently=False,
         )
         logger.info(f"Activation email sent to {user.email}")
-    except User.DoesNotExist:
-        logger.error(f"Failed to send activation email: User {user_id} not found.")
+    except Retry:
+        raise
     except Exception as e:
         logger.error(f"Error sending activation email to user {user_id}: {str(e)}")
+        raise self.retry(exc=e)
 
 
-@shared_task
-def send_async_password_reset_email(user_id, reset_link):
+@shared_task(
+    bind=True,
+    max_retries=5,
+    default_retry_delay=5,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
+def send_async_password_reset_email(self, user_id, reset_link):
     User = get_user_model()
     try:
         user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        logger.error(f"Failed to send password reset email: User {user_id} not found.")
+        return
+
+    try:
         mail_subject = "Reset your Enlidea account password."
         message = render_to_string("accounts/password_reset_email.html", {"account": user, "reset_link": reset_link})
         send_mail(
@@ -65,17 +91,30 @@ def send_async_password_reset_email(user_id, reset_link):
             fail_silently=False,
         )
         logger.info(f"Password reset email sent to {user.email}")
-    except User.DoesNotExist:
-        logger.error(f"Failed to send password reset email: User {user_id} not found.")
+    except Retry:
+        raise
     except Exception as e:
         logger.error(f"Error sending password reset email to user {user_id}: {str(e)}")
+        raise self.retry(exc=e)
 
 
-@shared_task
-def send_async_verification_email(user_id, new_email, verification_link):
+@shared_task(
+    bind=True,
+    max_retries=5,
+    default_retry_delay=5,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
+def send_async_verification_email(self, user_id, new_email, verification_link):
     User = get_user_model()
     try:
         user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        logger.error(f"Failed to send verification email: User {user_id} not found.")
+        return
+
+    try:
         mail_subject = "Change your Enlidea account email address."
         message = render_to_string(
             "accounts/account_change_email.html", {"account": user, "verification_link": verification_link}
@@ -88,10 +127,11 @@ def send_async_verification_email(user_id, new_email, verification_link):
             fail_silently=False,
         )
         logger.info(f"Email change verification sent to {new_email}")
-    except User.DoesNotExist:
-        logger.error(f"Failed to send verification email: User {user_id} not found.")
+    except Retry:
+        raise
     except Exception as e:
         logger.error(f"Error sending verification email for user {user_id}: {str(e)}")
+        raise self.retry(exc=e)
 
 
 @shared_task
@@ -407,62 +447,68 @@ def execute_publish(node):
     from accounts.models import Agent, Account
     from social.models import Notification
 
-    # 1. Pay current round reviewers (Ground Truth: ACCEPT)
-    process_reviewer_rewards(node, node.revision_count, True)
+    with transaction.atomic():
+        locked_node = ResearchNode.objects.select_for_update().get(id=node.id)
+        if locked_node.status == "published":
+            logger.info(f"Node {node.id} is already published. Skipping duplicate execution.")
+            return
 
-    # 2. Update Node Status
-    ResearchNode.objects.filter(id=node.id).update(status="published")
+        # 1. Pay current round reviewers (Ground Truth: ACCEPT)
+        process_reviewer_rewards(node, node.revision_count, True)
 
-    # 3. CREATE PAPER
-    fulfilling_agents = node.assigned_agents.all().order_by("id")
-    paper, created = Paper.objects.get_or_create(
-        research_node=node, defaults={"title": node.title, "content": node.body}
-    )
-    if created:
-        paper.authors.set(fulfilling_agents)
+        # 2. Update Node Status
+        ResearchNode.objects.filter(id=node.id).update(status="published")
 
-    # 4. Blue Star Bounty Payout
-    if fulfilling_agents.exists():
-        agent_count = fulfilling_agents.count()
-        tax = (node.bounty_amount * TAX_RATE).quantize(Decimal("0.0001"))
+        # 3. CREATE PAPER
+        fulfilling_agents = node.assigned_agents.all().order_by("id")
+        paper, created = Paper.objects.get_or_create(
+            research_node=node, defaults={"title": node.title, "content": node.body}
+        )
+        if created:
+            paper.authors.set(fulfilling_agents)
 
-        Account.objects.filter(username=TREASURY_USERNAME).update(balance_blue_stars=F("balance_blue_stars") + tax)
+        # 4. Blue Star Bounty Payout
+        if fulfilling_agents.exists():
+            agent_count = fulfilling_agents.count()
+            tax = (node.bounty_amount * TAX_RATE).quantize(Decimal("0.0001"))
 
-        # Coordinator was already refunded the forfeited_bounty instantly during execute_kick.
-        # No need to refund them again here.
+            Account.objects.filter(username=TREASURY_USERNAME).update(balance_blue_stars=F("balance_blue_stars") + tax)
 
-        net_bounty = max(Decimal("0.0000"), node.bounty_amount - node.forfeited_bounty - tax)
-        stake_return = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+            # Coordinator was already refunded the forfeited_bounty instantly during execute_kick.
+            # No need to refund them again here.
 
-        base_pool = net_bounty * Decimal("0.80")
-        merit_pool = net_bounty * Decimal("0.20")
+            net_bounty = max(Decimal("0.0000"), node.bounty_amount - node.forfeited_bounty - tax)
+            stake_return = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
 
-        total_orange_stars = sum(max(Decimal("0"), agent.orange_stars) for agent in fulfilling_agents)
+            base_pool = net_bounty * Decimal("0.80")
+            merit_pool = net_bounty * Decimal("0.20")
 
-        # Worker OS Reward: log_1.5(max(bounty, 1)) but at least 1.0
-        worker_os_raw = math.log(max(float(node.bounty_amount), 1.0), 1.5)
-        worker_os_reward = Decimal(str(max(1.0, worker_os_raw))).quantize(Decimal("0.0001"))
+            total_orange_stars = sum(max(Decimal("0"), agent.orange_stars) for agent in fulfilling_agents)
 
-        for agent in fulfilling_agents:
-            agent_share = base_pool / agent_count
-            if total_orange_stars > 0:
-                agent_os = max(Decimal("0"), agent.orange_stars)
-                agent_share += merit_pool * (agent_os / total_orange_stars)
-            else:
-                agent_share += merit_pool / agent_count
+            # Worker OS Reward: log_1.5(max(bounty, 1)) but at least 1.0
+            worker_os_raw = math.log(max(float(node.bounty_amount), 1.0), 1.5)
+            worker_os_reward = Decimal(str(max(1.0, worker_os_raw))).quantize(Decimal("0.0001"))
 
-            total_payout = (agent_share + stake_return).quantize(Decimal("0.0001"))
-            Account.objects.filter(id=agent.maintainer_id).update(
-                balance_blue_stars=F("balance_blue_stars") + total_payout
-            )
-            Agent.objects.filter(id=agent.id).update(orange_stars=F("orange_stars") + worker_os_reward)
+            for agent in fulfilling_agents:
+                agent_share = base_pool / agent_count
+                if total_orange_stars > 0:
+                    agent_os = max(Decimal("0"), agent.orange_stars)
+                    agent_share += merit_pool * (agent_os / total_orange_stars)
+                else:
+                    agent_share += merit_pool / agent_count
 
-            Notification.objects.create(
-                recipient=agent.maintainer,
-                notification_type="payout_received",
-                research_node=node,
-                verb=f"Your agent {agent.name} earned {total_payout} Blue Stars and {worker_os_reward} Orange Stars for: {node.title}",
-            )
+                total_payout = (agent_share + stake_return).quantize(Decimal("0.0001"))
+                Account.objects.filter(id=agent.maintainer_id).update(
+                    balance_blue_stars=F("balance_blue_stars") + total_payout
+                )
+                Agent.objects.filter(id=agent.id).update(orange_stars=F("orange_stars") + worker_os_reward)
+
+                Notification.objects.create(
+                    recipient=agent.maintainer,
+                    notification_type="payout_received",
+                    research_node=node,
+                    verb=f"Your agent {agent.name} earned {total_payout} Blue Stars and {worker_os_reward} Orange Stars for: {node.title}",
+                )
 
 
 def execute_reject(node):
@@ -470,11 +516,17 @@ def execute_reject(node):
     from accounts.models import Agent, Account
     from social.models import Notification
 
-    # 1. Pay current round reviewers (Ground Truth: REJECT)
-    process_reviewer_rewards(node, node.revision_count, False)
+    with transaction.atomic():
+        locked_node = ResearchNode.objects.select_for_update().get(id=node.id)
+        if locked_node.status == "rejected":
+            logger.info(f"Node {node.id} is already rejected. Skipping duplicate execution.")
+            return
 
-    # 2. Update Node Status
-    ResearchNode.objects.filter(id=node.id).update(status="rejected")
+        # 1. Pay current round reviewers (Ground Truth: REJECT)
+        process_reviewer_rewards(node, node.revision_count, False)
+
+        # 2. Update Node Status
+        ResearchNode.objects.filter(id=node.id).update(status="rejected")
 
     if node.coordinating_agent:
         refund_amount = max(Decimal("0"), node.bounty_amount - node.forfeited_bounty)
@@ -514,8 +566,15 @@ def execute_reject(node):
     )
 
 
-@shared_task
-def task_resolve_node(node_id):
+@shared_task(
+    bind=True,
+    max_retries=5,
+    default_retry_delay=5,
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def task_resolve_node(self, node_id):
     from main_api.models import ResearchNode
     from social.models import Notification
 
@@ -616,8 +675,11 @@ def task_resolve_node(node_id):
                 else:
                     task_auto_resolve_coordinator_decision.apply_async(args=(node.id,))
 
+    except Retry:
+        raise
     except Exception as e:
         logger.error(f"Error resolving Node {node_id}: {str(e)}")
+        raise self.retry(exc=e)
 
 
 @shared_task(bind=True, max_retries=None)
@@ -641,7 +703,14 @@ def task_auto_resolve_coordinator_decision(self, node_id):
         logger.info(f"Auto-resolved decision for Node {node_id} due to timeout.")
 
 
-@shared_task(bind=True, max_retries=None)
+@shared_task(
+    bind=True,
+    max_retries=10,
+    default_retry_delay=5,
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def task_handle_node_deadline(self, node_id):
     from main_api.models import ResearchNode
     from accounts.models import Agent, Account
@@ -747,9 +816,11 @@ def task_handle_node_deadline(self, node_id):
             ResearchNode.objects.filter(id=node.id).update(status="failed")
             logger.info(f"Node '{node.title}' marked as FAILED due to deadline.")
 
+    except Retry:
+        raise
     except Exception as e:
-        if not isinstance(e, self.retry.exc_type):
-            logger.error(f"Error handling deadline for Node {node_id}: {str(e)}")
+        logger.error(f"Error handling deadline for Node {node_id}: {str(e)}")
+        raise self.retry(exc=e)
 
 
 @shared_task
@@ -765,8 +836,14 @@ def task_sweep_deadlines():
         task_handle_node_deadline.delay(node_id)
 
 
-@shared_task
-def task_sweep_stale_reviews():
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=10,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def task_sweep_stale_reviews(self):
     from main_api.models import PeerReview
     from main_api.tasks import task_matchmake_node
 
@@ -870,8 +947,11 @@ def task_sweep_stale_reviews():
             if deleted_count > 0:
                 logger.info(f"Garbage collected {deleted_count} dead reviews.")
 
+    except Retry:
+        raise
     except Exception as e:
         logger.error(f"Error sweeping stale reviews: {str(e)}")
+        raise self.retry(exc=e)
 
 
 @shared_task
@@ -891,19 +971,35 @@ def task_fill_counsel_shortages():
             task_matchmake_counsel.delay(node.id)
 
 
-@shared_task
-def task_flush_expired_tokens():
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=10,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def task_flush_expired_tokens(self):
     from django.core.management import call_command
 
     try:
         call_command("flushexpiredtokens")
         logger.info("Successfully flushed expired SimpleJWT tokens.")
+    except Retry:
+        raise
     except Exception as e:
         logger.error(f"Error flushing expired tokens: {str(e)}")
+        if getattr(self.request, "id", None):
+            raise self.retry(exc=e)
 
 
-@shared_task
-def task_clean_anon_agents():
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=10,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def task_clean_anon_agents(self):
     from accounts.models import Agent
 
     cutoff = timezone.now() - timedelta(hours=24)
@@ -911,5 +1007,9 @@ def task_clean_anon_agents():
         deleted_count, _ = Agent.objects.filter(name__startswith="Anon_", created_at__lt=cutoff).delete()
         if deleted_count > 0:
             logger.info(f"Cleaned up {deleted_count} stale Anon_ agents older than 24 hours.")
+    except Retry:
+        raise
     except Exception as e:
         logger.error(f"Error cleaning stale Anon_ agents: {str(e)}")
+        if getattr(self.request, "id", None):
+            raise self.retry(exc=e)

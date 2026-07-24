@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from django.utils.timezone import localtime
@@ -618,7 +619,7 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
             "deadline",
             "interview_prompt",
         ]
-        read_only_fields = ["status"]
+        read_only_fields = ["status", "deadline"]
 
     def validate_profanity(self, text):
         from .models import ProfaneWord
@@ -669,13 +670,50 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # Reviewer cap validation
+        required_capabilities = attrs.get("required_capabilities")
+        if required_capabilities is not None and len(required_capabilities) == 0:
+            raise serializers.ValidationError(
+                {"required_capabilities": "At least one required capability must be selected."}
+            )
+
         required_reviews = attrs.get("required_reviews")
-        if required_reviews:
+        if required_reviews is not None:
             if required_reviews < 3:
                 raise serializers.ValidationError({"required_reviews": "Minimum of 3 peer reviews required."})
             if required_reviews > 20:
                 raise serializers.ValidationError({"required_reviews": "Maximum of 20 peer reviews allowed."})
+
+        required_collaborators = attrs.get("required_collaborators")
+        if required_collaborators is not None:
+            if required_collaborators < 1:
+                raise serializers.ValidationError({"required_collaborators": "At least 1 collaborator is required."})
+            if required_collaborators > 20:
+                raise serializers.ValidationError({"required_collaborators": "Maximum of 20 collaborators allowed."})
+
+        research_duration_days = attrs.get("research_duration_days")
+        if research_duration_days is not None:
+            if research_duration_days < 1:
+                raise serializers.ValidationError(
+                    {"research_duration_days": "Research duration must be at least 1 day."}
+                )
+            if research_duration_days > 365:
+                raise serializers.ValidationError(
+                    {"research_duration_days": "Research duration cannot exceed 365 days."}
+                )
+
+        min_trust = attrs.get("min_trust_required")
+        if min_trust is not None:
+            if min_trust < Decimal("-20.0000") or min_trust > Decimal("1000.0000"):
+                raise serializers.ValidationError(
+                    {"min_trust_required": "Min trust required must be between -20.0 and 1000.0."}
+                )
+
+        bounty = attrs.get("bounty_amount")
+        if bounty is not None:
+            if bounty < Decimal("0.0000") or bounty > Decimal("1000000.0000"):
+                raise serializers.ValidationError(
+                    {"bounty_amount": "Bounty amount must be between 0 and 1,000,000 Blue Stars."}
+                )
 
         return attrs
 
@@ -783,8 +821,22 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
 
         # Integer enforcement for trust
         min_trust = attrs.get("min_trust_required")
-        if min_trust is not None and min_trust % 1 != 0:
-            raise serializers.ValidationError({"min_trust_required": "Minimum trust required must be a whole number."})
+        if min_trust is not None:
+            if min_trust % 1 != 0:
+                raise serializers.ValidationError(
+                    {"min_trust_required": "Minimum trust required must be a whole number."}
+                )
+            if min_trust < Decimal("-20.0000") or min_trust > Decimal("1000.0000"):
+                raise serializers.ValidationError(
+                    {"min_trust_required": "Min trust required must be between -20.0 and 1000.0."}
+                )
+
+        required_collaborators = attrs.get("required_collaborators")
+        if required_collaborators is not None:
+            if required_collaborators < 1:
+                raise serializers.ValidationError({"required_collaborators": "At least 1 collaborator is required."})
+            if required_collaborators > 20:
+                raise serializers.ValidationError({"required_collaborators": "Maximum of 20 collaborators allowed."})
 
         # Reviewer cap validation
         required_reviews = attrs.get("required_reviews")

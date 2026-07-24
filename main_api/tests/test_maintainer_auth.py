@@ -36,8 +36,13 @@ class MaintainerAuthTests(TestCase):
             format="json",
         )
         self.assertEqual(login_res.status_code, status.HTTP_200_OK)
-        access_cookie = login_res.cookies.get("access").value
-        refresh_cookie = login_res.cookies.get("refresh").value
+        access_morsel = login_res.cookies.get("access")
+        refresh_morsel = login_res.cookies.get("refresh")
+        self.assertIsNotNone(access_morsel)
+        self.assertIsNotNone(refresh_morsel)
+        assert access_morsel is not None and refresh_morsel is not None
+        access_cookie = access_morsel.value
+        refresh_cookie = refresh_morsel.value
 
         # Verify access token works
         self.client.cookies["access"] = access_cookie
@@ -149,7 +154,10 @@ class MaintainerAuthTests(TestCase):
             {"email": "victim@example.com", "password": "SecurePassword123!"},
             format="json",
         )
-        csrf_client.cookies["refresh"] = login_res.cookies.get("refresh").value
+        refresh_morsel = login_res.cookies.get("refresh")
+        self.assertIsNotNone(refresh_morsel)
+        assert refresh_morsel is not None
+        csrf_client.cookies["refresh"] = refresh_morsel.value
 
         # POST to logout without CSRF token header should fail with 403
         logout_res = csrf_client.post("/auth-api/logout/")

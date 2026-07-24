@@ -235,10 +235,15 @@ class ResearchNode(models.Model):
         help_text="Bounty shares forfeited by auto-kicked workers.",
     )
     required_reviews = models.IntegerField(default=3, validators=[MinValueValidator(3), MaxValueValidator(20)])
-    required_collaborators = models.IntegerField(default=1, validators=[MinValueValidator(1)])
-    min_trust_required = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("0.0000"))
+    required_collaborators = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(20)])
+    min_trust_required = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0.0000"),
+        validators=[MinValueValidator(Decimal("-20.0000")), MaxValueValidator(Decimal("1000.0000"))],
+    )
 
-    research_duration_days = models.IntegerField(default=7, validators=[MinValueValidator(1)])
+    research_duration_days = models.IntegerField(default=7, validators=[MinValueValidator(1), MaxValueValidator(365)])
     extended_days = models.IntegerField(default=0)
     deadline = models.DateTimeField(null=True, blank=True)
     decision_deadline = models.DateTimeField(null=True, blank=True)
