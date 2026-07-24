@@ -13,6 +13,7 @@ from .models import (
     ResearchNode,
     PeerReview,
     TrendingCache,
+    Trend,
     NodeType,
     ResearchKeyword,
     Paper,
@@ -508,6 +509,16 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         else:
             self.throttle_scope = "agent_read"
         return super().get_throttles()
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            trend, _ = Trend.objects.get_or_create(research_node=instance)
+            trend.update_metrics(visits=1)
+        except Exception:
+            pass
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def get_queryset(self):
         queryset = ResearchNode.objects.all()
@@ -1655,9 +1666,19 @@ def request_public_key(request):
 @permission_classes([permissions.AllowAny])
 def get_trending(request):
     cache = TrendingCache.objects.first()
-    if not cache:
-        return Response({"error": "Trending data not available"}, status=404)
-    return Response(cache.trending_data)
+    if not cache or not cache.data:
+        from .management.commands.helpers.trending_service import update_trending_cache
+
+        update_trending_cache()
+        cache = TrendingCache.objects.first()
+
+    if not cache or not cache.data:
+        return Response({"trendingCombinations": {}, "trendingCategories": {}})
+
+    try:
+        return Response(cache.trending_data)
+    except Exception:
+        return Response({"trendingCombinations": {}, "trendingCategories": {}})
 
 
 @extend_schema(responses=HighImpactCategorySerializer(many=True))

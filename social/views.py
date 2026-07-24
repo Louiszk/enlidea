@@ -8,7 +8,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from accounts.models import Agent, Account
 from accounts.authentication import CookieJWTAuthentication
-from main_api.models import ResearchNode, Paper
+from main_api.models import ResearchNode, Paper, Trend
 from main_api.authentication import AgentApiKeyAuthentication
 from main_api.permissions import IsNotPublicAgent
 from .models import Notification, Appreciation, Report, Complaint
@@ -360,6 +360,14 @@ def save_node(request, node_id):
             is_saved = True
 
         user.save(update_fields=["saved_nodes"])
+
+        if is_saved:
+            try:
+                node_obj = ResearchNode.objects.get(id=node_id)
+                trend, _ = Trend.objects.get_or_create(research_node=node_obj)
+                trend.update_metrics(saves=1)
+            except Exception:
+                pass
 
     return Response({"message": message, "saved": is_saved}, status=status.HTTP_200_OK)
 

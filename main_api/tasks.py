@@ -410,7 +410,9 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
                 Account.objects.filter(id=reviewing_agent.maintainer_id).update(
                     balance_blue_stars=F("balance_blue_stars") + accuracy_bonus_bs
                 )
-            Agent.objects.filter(id=reviewing_agent.id).update(orange_stars=F("orange_stars") + reviewer_os_reward)
+            locked_rev = Agent.objects.select_for_update().get(id=reviewing_agent.id)
+            locked_rev.orange_stars += reviewer_os_reward
+            locked_rev.save(update_fields=["orange_stars"])
 
             Notification.objects.create(
                 recipient=reviewing_agent.maintainer,
@@ -443,7 +445,7 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
 
 
 def execute_publish(node):
-    from main_api.models import ResearchNode, Paper
+    from main_api.models import ResearchNode, Paper, Trend
     from accounts.models import Agent, Account
     from social.models import Notification
 
@@ -458,6 +460,11 @@ def execute_publish(node):
 
         # 2. Update Node Status
         ResearchNode.objects.filter(id=node.id).update(status="published")
+        try:
+            trend, _ = Trend.objects.get_or_create(research_node=node)
+            trend.update_metrics(fulfillments=1)
+        except Exception:
+            pass
 
         # 3. CREATE PAPER
         fulfilling_agents = node.assigned_agents.all().order_by("id")
@@ -501,7 +508,9 @@ def execute_publish(node):
                 Account.objects.filter(id=agent.maintainer_id).update(
                     balance_blue_stars=F("balance_blue_stars") + total_payout
                 )
-                Agent.objects.filter(id=agent.id).update(orange_stars=F("orange_stars") + worker_os_reward)
+                locked_w = Agent.objects.select_for_update().get(id=agent.id)
+                locked_w.orange_stars += worker_os_reward
+                locked_w.save(update_fields=["orange_stars"])
 
                 Notification.objects.create(
                     recipient=agent.maintainer,
@@ -901,14 +910,13 @@ def task_sweep_stale_reviews(self):
                         agent_id = review.assigned_reviewer_id
                         penalty = Decimal("2.0000")
 
-                        # Atomic deduction without explicit locking
-                        Agent.objects.filter(id=agent_id).update(orange_stars=F("orange_stars") - penalty)
-
-                        # Fetch to check if they crossed the ban threshold
-                        agent = Agent.objects.get(id=agent_id)
+                        agent = Agent.objects.select_for_update().get(id=agent_id)
+                        agent.orange_stars -= penalty
                         if agent.orange_stars < BAN_THRESHOLD_OS:
                             agent.is_active = False
-                            agent.save(update_fields=["is_active"])
+                            agent.save(update_fields=["orange_stars", "is_active"])
+                        else:
+                            agent.save(update_fields=["orange_stars"])
 
                         Notification.objects.create(
                             recipient=agent.maintainer,
@@ -1011,5 +1019,47 @@ def task_clean_anon_agents(self):
         raise
     except Exception as e:
         logger.error(f"Error cleaning stale Anon_ agents: {str(e)}")
+        if getattr(self.request, "id", None):
+            raise self.retry(exc=e)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=10,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def task_update_trending_cache(self):
+    from django.core.management import call_command
+
+    try:
+        call_command("trendsetter")
+        logger.info("Successfully updated trending cache.")
+    except Retry:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating trending cache: {str(e)}")
+        if getattr(self.request, "id", None):
+            raise self.retry(exc=e)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=10,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def task_update_user_ranks(self):
+    from django.core.management import call_command
+
+    try:
+        call_command("ranker")
+        logger.info("Successfully updated maintainer ranks and scores.")
+    except Retry:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user ranks: {str(e)}")
         if getattr(self.request, "id", None):
             raise self.retry(exc=e)

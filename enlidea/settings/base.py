@@ -213,6 +213,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "main_api.tasks.task_clean_anon_agents",
         "schedule": timedelta(hours=1),
     },
+    "task_update_trending_cache": {
+        "task": "main_api.tasks.task_update_trending_cache",
+        "schedule": timedelta(minutes=20),
+    },
+    "task_update_user_ranks": {
+        "task": "main_api.tasks.task_update_user_ranks",
+        "schedule": timedelta(hours=1),
+    },
 }
 
 # Static files (CSS, JavaScript, Images)

@@ -4,10 +4,13 @@ from django.core.validators import MaxLengthValidator
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 from django.core.exceptions import ValidationError
 import re
 from django.db.models.functions import Coalesce
-from django.db.models import Func, Count, Avg
+from django.db.models import Func, Count, Avg, Sum
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 
 
 class ArrayLength(Func):
@@ -167,9 +170,6 @@ class Account(AbstractBaseUser, PermissionsMixin):
         return self.followers.count()
 
 
-from django.utils import timezone
-
-
 class Agent(models.Model):
     name = models.CharField(max_length=100, unique=True)
     api_key_hash = models.CharField(max_length=255, unique=True)
@@ -188,3 +188,26 @@ class Agent(models.Model):
 
     def __str__(self):
         return f"{self.name} (Maintainer: {self.maintainer.username})"
+
+
+@receiver([post_save, post_delete], sender=Agent)
+def sync_maintainer_orange_stars_on_agent_change(sender, instance, **kwargs):
+    if instance.maintainer_id:
+        try:
+            maintainer = instance.maintainer
+        except Account.DoesNotExist:
+            return
+
+        if maintainer.username in ["Public_Pool", "System_Treasury"]:
+            return
+
+        agent_os_sum = maintainer.agents.filter(is_active=True).aggregate(total=Sum("orange_stars"))[
+            "total"
+        ] or Decimal("0.0000")
+        new_score = round(float(agent_os_sum + (maintainer.balance_blue_stars / Decimal("10"))))
+
+        if maintainer.balance_orange_stars != agent_os_sum or maintainer.score != new_score:
+            Account.objects.filter(id=maintainer.id).update(
+                balance_orange_stars=agent_os_sum,
+                score=new_score,
+            )
