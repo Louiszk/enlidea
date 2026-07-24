@@ -2,6 +2,7 @@ import logging
 from rest_framework import status
 from typing import cast, Any
 from django.conf import settings
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,9 @@ def send_verification_email(request, account, new_email):
     signed_email = sign_email(new_email)
     verification_link = f"{settings.FRONTEND_URL}/verify-email/{uidb64}/{token}/{signed_email}"
 
-    cast(Any, send_async_verification_email).delay(account.id, new_email, verification_link)
+    transaction.on_commit(
+        lambda: cast(Any, send_async_verification_email).delay(account.id, new_email, verification_link)
+    )
     return True
 
 
@@ -114,16 +117,17 @@ def personal_information(request):
     update_last_successful_update_time(user)
 
     new_email = serializer.validated_data.get("email")
-    if new_email and new_email != user.email:
-        send_verification_email(request, user, new_email)
+    with transaction.atomic():
+        if new_email and new_email != user.email:
+            send_verification_email(request, user, new_email)
+            serializer.save()
+            return Response(
+                {
+                    "message": "We have sent you a validation link at your new email. If you cannot verify your email, it will stay as before."
+                },
+                status=status.HTTP_200_OK,
+            )
         serializer.save()
-        return Response(
-            {
-                "message": "We have sent you an validation link at your new email. If you cannot verify your email, it will stay as before."
-            },
-            status=status.HTTP_200_OK,
-        )
-    serializer.save()
 
     return Response({"message": "Personal information updated successfully."}, status=status.HTTP_200_OK)
 

@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import F
 from celery import shared_task
-from celery.exceptions import Retry
+from celery.exceptions import Retry, MaxRetriesExceededError
 from decimal import Decimal
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -57,10 +57,14 @@ def send_async_activation_email(self, user_id, activation_link):
             fail_silently=False,
         )
         logger.info(f"Activation email sent to {user.email}")
-    except Retry:
+    except (Retry, MaxRetriesExceededError):
         raise
     except Exception as e:
         logger.error(f"Error sending activation email to user {user_id}: {str(e)}")
+        if self.request.retries >= self.max_retries:
+            logger.critical(
+                f"METRIC email_delivery_failure task=send_async_activation_email user_id={user_id} error={str(e)}"
+            )
         raise self.retry(exc=e)
 
 
@@ -91,10 +95,14 @@ def send_async_password_reset_email(self, user_id, reset_link):
             fail_silently=False,
         )
         logger.info(f"Password reset email sent to {user.email}")
-    except Retry:
+    except (Retry, MaxRetriesExceededError):
         raise
     except Exception as e:
         logger.error(f"Error sending password reset email to user {user_id}: {str(e)}")
+        if self.request.retries >= self.max_retries:
+            logger.critical(
+                f"METRIC email_delivery_failure task=send_async_password_reset_email user_id={user_id} error={str(e)}"
+            )
         raise self.retry(exc=e)
 
 
@@ -127,10 +135,14 @@ def send_async_verification_email(self, user_id, new_email, verification_link):
             fail_silently=False,
         )
         logger.info(f"Email change verification sent to {new_email}")
-    except Retry:
+    except (Retry, MaxRetriesExceededError):
         raise
     except Exception as e:
         logger.error(f"Error sending verification email for user {user_id}: {str(e)}")
+        if self.request.retries >= self.max_retries:
+            logger.critical(
+                f"METRIC email_delivery_failure task=send_async_verification_email user_id={user_id} error={str(e)}"
+            )
         raise self.retry(exc=e)
 
 

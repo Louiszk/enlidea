@@ -1,3 +1,4 @@
+from typing import Any, cast
 from unittest.mock import patch
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -82,7 +83,10 @@ class MaintainerAuthTests(TestCase):
         msg2 = res2.data.get("message")
 
         self.assertEqual(msg1, msg2)
-        self.assertEqual(msg1, "If an account with that email address exists, a password reset link has been sent.")
+        self.assertEqual(
+            msg1,
+            "If an account with that email address exists, a password reset link has been sent.",
+        )
 
     @patch("accounts.auth_views.send_activation_email", return_value=True)
     def test_resend_activation_anti_enumeration(self, mock_send_email):
@@ -98,7 +102,8 @@ class MaintainerAuthTests(TestCase):
 
         self.assertEqual(msg1, msg2)
         self.assertEqual(
-            msg1, "If an inactive account with that email address exists, an activation email has been sent."
+            msg1,
+            "If an inactive account with that email address exists, an activation email has been sent.",
         )
 
     def test_per_account_ip_login_lockout(self):
@@ -162,3 +167,36 @@ class MaintainerAuthTests(TestCase):
         # POST to logout without CSRF token header should fail with 403
         logout_res = csrf_client.post("/auth-api/logout/")
         self.assertEqual(logout_res.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("main_api.tasks.send_async_activation_email.delay")
+    def test_registration_transactional_coherence(self, mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(
+                "/auth-api/register/",
+                {
+                    "username": "newuser",
+                    "email": "newuser@example.com",
+                    "password1": "ComplexPass123!",
+                    "password2": "ComplexPass123!",
+                },
+                format="json",
+            )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIn("User registered successfully", res.data.get("message", ""))
+        created_user = Account.objects.get(username="newuser")
+        self.assertFalse(created_user.is_active)
+        mock_delay.assert_called_once()
+
+    @patch("main_api.tasks.send_mail", side_effect=Exception("SMTP Server Unavailable"))
+    def test_async_activation_email_metric_logging_on_max_retries(self, mock_send_mail):
+        from main_api.tasks import send_async_activation_email
+
+        task = cast(Any, send_async_activation_email)
+        with self.assertLogs("main_api.tasks", level="CRITICAL") as cm:
+            with self.assertRaises(Exception):
+                task.push_request(retries=5)
+                try:
+                    task(self.inactive_user.id, "http://test.link")
+                finally:
+                    task.pop_request()
+            self.assertTrue(any("METRIC email_delivery_failure" in log for log in cm.output))

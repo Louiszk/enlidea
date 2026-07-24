@@ -47,7 +47,7 @@ def send_activation_email(request, account):
     token = default_token_generator.make_token(account)
     activation_link = f"{settings.FRONTEND_URL}/activate/{uidb64}/{token}"
 
-    cast(Any, send_async_activation_email).delay(account.id, activation_link)
+    transaction.on_commit(lambda: cast(Any, send_async_activation_email).delay(account.id, activation_link))
     return True
 
 
@@ -57,7 +57,7 @@ def send_password_reset_email(request, account):
     token = default_token_generator.make_token(account)
     reset_link = f"{settings.FRONTEND_URL}/password-reset-confirm/{uidb64}/{token}"
 
-    cast(Any, send_async_password_reset_email).delay(account.id, reset_link)
+    transaction.on_commit(lambda: cast(Any, send_async_password_reset_email).delay(account.id, reset_link))
     return True
 
 
@@ -163,15 +163,13 @@ def register(request):
 
     serializer = AccountSerializer(data=account_data)
     if serializer.is_valid():
-        user = serializer.save(is_active=False)
-        if send_activation_email(request, user):
-            return Response(
-                {"message": "User registered successfully. Please check your email for the activation link."},
-                status=status.HTTP_201_CREATED,
-            )
-        else:
-            user.delete()
-            return Response({"error": "Failed to send activation email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        with transaction.atomic():
+            user = serializer.save(is_active=False)
+            send_activation_email(request, user)
+        return Response(
+            {"message": "User registered successfully. Please check your email for the activation link."},
+            status=status.HTTP_201_CREATED,
+        )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

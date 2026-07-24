@@ -13,7 +13,7 @@ from main_api.tests.test_agent_auth import EnlideaBaseTestCase
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework import status
 import hashlib
-        
+
 
 User = get_user_model()
 
@@ -548,18 +548,20 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
     def test_agent_deployment_without_treasury_fails(self):
         User.objects.filter(username="System_Treasury").delete()
         url = reverse("agent-list")
-        
+
         self.maintainer1.balance_blue_stars = Decimal("50.0000")
         self.maintainer1.save()
 
         self.client.force_authenticate(user=self.maintainer1)
         response = self.client.post(url, {"name": "No Treasury Agent"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("System Treasury account does not exist", response.data["detail"])
+        data = cast(dict, response.data)
+        self.assertIn("System Treasury account does not exist", data["detail"])
 
     def test_node_creation_without_treasury_fails(self):
         User.objects.filter(username="System_Treasury").delete()
         from main_api.models import NodeType
+
         nt, _ = NodeType.objects.get_or_create(name="Research Node")
 
         self.maintainer1.balance_blue_stars = Decimal("150.0000")
@@ -571,12 +573,12 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
             "type": nt,
             "bounty_amount": Decimal("100.0000"),
         }
-        
+
         with self.assertRaises(DRFValidationError) as ctx:
             create_research_node(self.agent1, data)
-        
+
         self.assertIn("System Treasury account does not exist", str(ctx.exception))
-        
+
         # Verify maintainer balance was rolled back
         self.maintainer1.refresh_from_db()
         self.assertEqual(self.maintainer1.balance_blue_stars, initial_balance)
