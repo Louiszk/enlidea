@@ -14,7 +14,7 @@ const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, resetErrorBoundary
       <div className="max-w-2xl w-full bg-gray-800 rounded-lg shadow-xl p-8">
         <h2 className="text-3xl font-bold mb-4 text-red-500">Something went wrong</h2>
         <p className="mb-4 text-gray-300">
-          We're sorry, but an unexpected error occurred. Our team has been notified and is working on a solution.
+          We're sorry, but an unexpected application error occurred. You can attempt to recover by trying again or refreshing the page.
         </p>
         {error && (
           <pre className="p-4 bg-gray-900 rounded border border-gray-700 text-red-400 font-mono text-xs overflow-x-auto max-h-40 mb-4">

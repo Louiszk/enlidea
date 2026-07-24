@@ -105,7 +105,7 @@ const SearchResults = () => {
     const title = 'title' in item ? item.title : undefined;
 
     return (
-    <Link to={slug ? `/capabilities/${slug}` : `/user/${id}`} key={id || index} className="bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700 p-4 rounded-xl shadow flex items-center gap-3 group">
+    <Link to={slug ? `/categories/${slug}` : `/user/${id}`} key={id || index} className="bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700 p-4 rounded-xl shadow flex items-center gap-3 group">
         <div className="text-indigo-400 group-hover:scale-110 transition-transform">
           {getIcon(slug ? 'capability' : 'user')}
         </div>

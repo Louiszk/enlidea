@@ -45,18 +45,29 @@ const NoNodes = ( {path}: {path: {slug: string; title: string}[]} ) => {
     );
   };
   
-  const CapabilityNodes = () => {
-    const { slug } = useParams();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { message, removeMessage } = useMessage();
-  
-    // Parse query parameters
-    const queryParams = new URLSearchParams(location.search);
-    const page = parseInt(queryParams.get('page') || '1', 10);
-    const sortBy = queryParams.get('sort') || 'trending';
-    const filters = queryParams.get('filters') || '{}';
-    const filterObj = JSON.parse(decodeURIComponent(filters));
+interface FilterObj {
+  tags?: string;
+  types?: string;
+  status?: string;
+}
+
+const CapabilityNodes = () => {
+  const { slug } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { message, removeMessage } = useMessage();
+
+  // Parse query parameters
+  const queryParams = new URLSearchParams(location.search);
+  const page = parseInt(queryParams.get('page') || '1', 10);
+  const sortBy = queryParams.get('sort') || 'trending';
+  const filters = queryParams.get('filters') || '{}';
+  let filterObj: FilterObj = {};
+  try {
+    filterObj = JSON.parse(decodeURIComponent(filters));
+  } catch {
+    filterObj = {};
+  }
   
     const { data, error, isLoading } = useQuery({
       queryKey: ['capabilityNodes', slug, page, sortBy, filters],
