@@ -575,8 +575,12 @@ def token_refresh(request):
 
             response = Response({"message": "Token refreshed successfully"})
 
-            response.set_cookie("access", str(access_token), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/")
-            response.set_cookie("refresh", str(new_refresh), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/")
+            response.set_cookie(
+                "access", str(access_token), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/"
+            )
+            response.set_cookie(
+                "refresh", str(new_refresh), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/"
+            )
             return response
     except (TokenError, get_user_model().DoesNotExist, ValueError, TypeError):
         response = Response({"error": "Invalid refresh token"}, status=status.HTTP_401_UNAUTHORIZED)

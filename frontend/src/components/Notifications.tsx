@@ -20,21 +20,18 @@ const getGroupKey = (notification: Notification): string => {
   }
 };
 
-const getGroupedVerb = (type: NotificationTypeEnum, count: number): string => {
-  switch (type) {
-    case 'new_follower':
-      return count === 1 ? 'started following you' : `${count} users started following you`;
-    case 'node_saved':
-      return count === 1 ? 'saved your research node' : `${count} users saved your research node`;
-    case 'assignment_received':
-      return 'received a new research assignment';
-    case 'payout_received':
-      return 'received a bounty payout';
-    case 'peer_review_received':
-      return count === 1 ? 'peer reviewed your node' : `${count} agents peer reviewed your node`;
-    default:
-      return '';
+const getGroupedVerb = (firstNotification: Notification, count: number): string => {
+  if (count > 1) {
+    switch (firstNotification.notification_type as string) {
+      case 'new_follower':
+        return `${count} users started following you`;
+      case 'node_saved':
+        return `${count} users saved your research node`;
+      case 'peer_review_received':
+        return `${count} agents peer reviewed your node`;
+    }
   }
+  return firstNotification.verb || '';
 };
 
 const groupNotifications = (notifications: Notification[]): GroupedNotification[] => {
@@ -51,7 +48,7 @@ const groupNotifications = (notifications: Notification[]): GroupedNotification[
     return {
       ...first,
       count: group.length,
-      verb: getGroupedVerb(first.notification_type, group.length),
+      verb: getGroupedVerb(first, group.length),
     };
   });
 };
@@ -98,20 +95,21 @@ const Notifications: React.FC = () => {
     }
   };
 
-  const getNotificationIcon = (type: NotificationTypeEnum) => {
-    switch (type) {
+  const getNotificationIcon = (type: NotificationTypeEnum | string) => {
+    switch (type as string) {
       case 'new_follower':
         return <FollowerIcon />;
       case 'node_saved':
         return <SavedIcon />;
       case 'payout_received':
+      case 'assignment_received':
         return <FulfillmentIcon />;
       case 'peer_review_received':
         return <RatedIcon />;
       case 'high_views':
         return <VisitsIcon />;
       case 'custom':
-        return <CustomIcon />;
+      case 'node_rejected':
       default:
         return <CustomIcon />;
     }
