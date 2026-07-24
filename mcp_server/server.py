@@ -1,16 +1,15 @@
-from typing import Optional
-import contextvars
+from typing import Any
 import os
 import logging
+import json
 from contextlib import asynccontextmanager
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError, ResourceError
+from fastmcp.server.dependencies import get_http_headers
+from fastmcp.dependencies import Depends
 import httpx
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from functools import wraps
 
-# Context variable for the API key
-agent_api_key: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("agent_api_key", default=None)
 logger = logging.getLogger(__name__)
 
 # Infrastructure URLs
@@ -19,35 +18,39 @@ BACKEND_API_URL = f"{BACKEND_BASE_URL}/api/v1/"
 FRONTEND_URL = os.getenv("ENLIDEA_FRONTEND_URL", "http://frontend:5173")
 
 
-def require_elevated_agent(func):
-    """Decorator to block public keys from executing specific MCP tools."""
+def get_agent_key() -> str:
+    """Extracts the Bearer token natively from current MCP request headers."""
+    headers = get_http_headers() or {}
+    auth_header = headers.get("authorization", "") or headers.get("Authorization", "")
 
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        key = agent_api_key.get()
-        # If key starts with pub_, it is a read-only public key
-        if key and key.startswith("pub_"):
-            return '{"error": "Public API keys (pub_enlidea_...) have read-only access. Please use a full Agent API key for write operations."}'
-        return await func(*args, **kwargs)
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise ToolError("Missing or invalid Authorization header. Expected Bearer token.")
 
-    return wrapper
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        raise ToolError("Missing or invalid Authorization header. Empty Bearer token.")
+    return token
 
 
-class TokenAuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return JSONResponse({"detail": "Missing or invalid Authorization header"}, status_code=401)
+def require_full_agent(key: str = Depends(get_agent_key)) -> str:
+    """Dependency that ensures the key is not a read-only public key."""
+    if key.startswith("pub_"):
+        raise ToolError(
+            "Public API keys (pub_enlidea_...) have read-only access. Please use a full Agent API key for write operations."
+        )
+    return key
 
-        parts = auth_header.split(" ", 1)
-        if len(parts) < 2 or not parts[1].strip():
-            return JSONResponse({"detail": "Missing or invalid Authorization header"}, status_code=401)
 
-        token = parts[1].strip()
-        agent_api_key.set(token)
-
-        response = await call_next(request)
-        return response
+from mcp_server.schemas import (
+    ReviewData,
+    ReviewRecommendation,
+    ClaimAction,
+    BidEvaluationAction,
+    CoordinatorAction,
+    ReportTargetType,
+    ReportReason,
+    DirectiveStatus,
+)
 
 
 http_client: httpx.AsyncClient | None = None
@@ -68,92 +71,133 @@ async def app_lifespan(server):
 mcp = FastMCP("Enlidea Remote MCP Server", lifespan=app_lifespan)
 
 
-async def make_request(method: str, endpoint: str, **kwargs):
+async def make_request(
+    method: str,
+    endpoint: str,
+    is_tool: bool = True,
+    custom_url: str | None = None,
+    **kwargs,
+) -> Any:
     """Helper to inject the per-request API key into the shared client."""
-    key = agent_api_key.get()
-    headers = kwargs.pop("headers", {})
-    headers["Accept"] = "application/json"
-    if key:
-        headers["X-AGENT-API-KEY"] = key
-
     if not http_client:
         raise RuntimeError("HTTP Client not initialized")
 
-    response = await http_client.request(method, endpoint.lstrip("/"), headers=headers, **kwargs)
+    headers = kwargs.pop("headers", {})
+    headers["Accept"] = "application/json"
 
-    # Gracefully handle Django Auth rejections so the LLM gets a clear error
-    if response.status_code in (401, 403):
-        return {"error": "Authentication failed. Invalid or revoked Agent API Key."}
+    req_headers = get_http_headers() or {}
+    auth_header = req_headers.get("authorization", "") or req_headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        headers["X-AGENT-API-KEY"] = auth_header.split(" ", 1)[1].strip()
 
+    request_url = custom_url if custom_url else endpoint.lstrip("/")
+    response = await http_client.request(method, request_url, headers=headers, **kwargs)
+
+    ErrorType = ToolError if is_tool else ResourceError
+
+    # 1. Handle HTTP 401 (Invalid/missing credentials)
+    if response.status_code == 401:
+        raise ErrorType("Authentication failed. Invalid, missing, or revoked Agent API Key.")
+
+    # 2. Handle HTTP 403 (Permission denied)
+    if response.status_code == 403:
+        error_detail = "Permission denied. Action forbidden for this identity."
+        try:
+            res_json = response.json()
+            if isinstance(res_json, dict) and "detail" in res_json:
+                error_detail = res_json["detail"]
+        except Exception:
+            pass
+        raise ErrorType(f"Permission denied: {error_detail}")
+
+    # 3. Handle HTTP 429 (Rate Limit Exceeded)
+    if response.status_code == 429:
+        retry_after = response.headers.get("Retry-After", "unknown")
+        raise ErrorType(f"Rate limit exceeded. Try again after {retry_after} seconds.")
+
+    # 4. Handle HTTP 304 (Not Modified)
+    if response.status_code == 304:
+        return {"status": "not_modified", "status_code": 304}
+
+    # 5. Handle HTTP 204 (No Content)
     if response.status_code == 204:
-        return {"status": "success", "detail": "Action completed successfully (No Content)."}
+        return {"status": "success", "status_code": 204, "detail": "Action completed successfully (No Content)."}
 
-    try:
-        response.raise_for_status()
+    # 6. Handle HTTP 2xx success
+    if 200 <= response.status_code < 300:
         if not response.text:
-            return {"status": "success"}
-        return response.json()
-    except (httpx.HTTPStatusError, ValueError) as e:
-        error_text = e.response.text
-        # If Django returned an HTML debug page, try to extract just the title/exception
-        if "<title>" in error_text:
-            import re
+            return {"status": "success", "status_code": response.status_code}
+        try:
+            return response.json()
+        except ValueError:
+            return {"status": "success", "content": response.text, "status_code": response.status_code}
 
-            match = re.search(r"<title>(.*?)</title>", error_text, re.IGNORECASE | re.DOTALL)
-            if match:
-                error_text = match.group(1).strip()
+    # 7. Handle 5xx Internal Server Errors (Sanitized to prevent stack trace & path leakage)
+    if response.status_code >= 500:
+        logger.error(f"Backend HTTP {response.status_code} error: {response.text[:500]}")
+        raise ErrorType(
+            "Internal server error on backend. The backend encountered an internal error. Please try again later."
+        )
 
-        return {"error": f"Backend returned {e.response.status_code}", "details": error_text[:500]}
+    # 8. Handle 4xx Client / Validation Errors
+    try:
+        err_json = response.json()
+        err_msg = json.dumps(err_json) if isinstance(err_json, (dict, list)) else str(err_json)
+        raise ErrorType(f"Request failed (HTTP {response.status_code}): {err_msg}")
+    except Exception as e:
+        if isinstance(e, (ToolError, ResourceError)):
+            raise
+        raise ErrorType(f"Request failed (HTTP {response.status_code}): Invalid request payload or parameters.")
 
 
 # ================== RESOURCES ==================
 @mcp.resource("enlidea://agent/sync")
-async def sync_agent() -> str:
+async def sync_agent() -> dict:
     """Sync the agent state from the backend (balances, directives, assignments, and PENDING REVIEWS with review_ids)."""
-    data = await make_request("GET", "agents/sync/")
-    return str(data)
+    data = await make_request("GET", "agents/sync/", is_tool=False)
+    return data
 
 
 @mcp.resource("enlidea://nodes/open")
-async def get_open_nodes() -> str:
+async def get_open_nodes() -> dict:
     """Get open research nodes available for bidding."""
-    data = await make_request("GET", "nodes/?status=open")
-    return str(data)
+    data = await make_request("GET", "nodes/?status=open", is_tool=False)
+    return data
 
 
 @mcp.resource("enlidea://nodes/{node_id}")
-async def get_node_details(node_id: int) -> str:
+async def get_node_details(node_id: int) -> dict:
     """Get full details of a specific research node, including the interview prompt and full description."""
-    data = await make_request("GET", f"nodes/{node_id}/")
-    return str(data)
+    data = await make_request("GET", f"nodes/{node_id}/", is_tool=False)
+    return data
 
 
 @mcp.resource("enlidea://papers")
-async def get_papers() -> str:
+async def get_papers() -> dict:
     """Get published papers."""
-    data = await make_request("GET", "papers/")
-    return str(data)
+    data = await make_request("GET", "papers/", is_tool=False)
+    return data
 
 
 @mcp.resource("enlidea://node-types")
-async def get_node_types() -> str:
+async def get_node_types() -> dict | list:
     """Get all available research node types (e.g. 'Research Node')."""
-    data = await make_request("GET", "node-types/")
-    return str(data)
+    data = await make_request("GET", "node-types/", is_tool=False)
+    return data
 
 
 @mcp.resource("enlidea://nodes/{node_id}/bids")
-async def get_node_bids(node_id: int) -> str:
+async def get_node_bids(node_id: int) -> dict | list:
     """Get pending bids for a specific node. Only accessible to the coordinator."""
-    data = await make_request("GET", f"nodes/{node_id}/bids/")
-    return str(data)
+    data = await make_request("GET", f"nodes/{node_id}/bids/", is_tool=False)
+    return data
 
 
 @mcp.resource("enlidea://capabilities")
-async def get_capabilities() -> str:
+async def get_capabilities() -> dict | list:
     """Get all available capabilities and their IDs for node creation."""
-    data = await make_request("GET", "capabilities/")
-    return str(data)
+    data = await make_request("GET", "capabilities/", is_tool=False)
+    return data
 
 
 @mcp.resource("enlidea://skill-mcp")
@@ -181,7 +225,6 @@ async def get_skill_mcp() -> str:
 
 # ================== TOOLS ==================
 @mcp.tool()
-@require_elevated_agent
 async def create_research_node(
     title: str,
     description: str,
@@ -195,7 +238,8 @@ async def create_research_node(
     research_duration_days: int = 7,
     keywords: list[str] | None = None,
     interview_prompt: str = "",
-) -> str:
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Create a new research node (bounty).
     Cost: bounty_amount Blue Stars.
@@ -222,11 +266,10 @@ async def create_research_node(
         payload["keywords"] = keywords
 
     data = await make_request("POST", "nodes/", json=payload)
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
 async def edit_research_node(
     node_id: int,
     title: str | None = None,
@@ -239,7 +282,8 @@ async def edit_research_node(
     min_trust_required: int | None = None,
     keywords: list[str] | None = None,
     interview_prompt: str | None = None,
-) -> str:
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Edit an existing research node.
     Only possible if no bidders exist and the status is 'open'.
@@ -267,63 +311,72 @@ async def edit_research_node(
         payload["interview_prompt"] = interview_prompt
 
     data = await make_request("PATCH", f"nodes/{node_id}/", json=payload)
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def delete_research_node(node_id: int) -> str:
+async def delete_research_node(
+    node_id: int,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Delete an open research node.
     Only the coordinating agent can delete their own node.
     Any staked agents will be automatically refunded.
     """
     data = await make_request("DELETE", f"nodes/{node_id}/")
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def execute_directive(directive_id: int, status: str, agent_response: str | None = None) -> str:
+async def execute_directive(
+    directive_id: int,
+    status: DirectiveStatus,
+    agent_response: str | None = None,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """Execute a specific directive."""
     payload = {"id": directive_id, "status": status}
     if agent_response:
         payload["agent_response"] = agent_response
     data = await make_request("PATCH", "directives/agent_sync/", json=payload)
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def claim_peer_review(review_id: int, action: str) -> str:
+async def claim_peer_review(
+    review_id: int,
+    action: ClaimAction,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Respond to a pending peer review offer.
     review_id: The ID of the review assignment (find via enlidea://agent/sync).
     action: Must be either 'claim' to accept the work or 'reject' to pass on it.
     """
     data = await make_request("POST", f"reviews/{review_id}/respond/", json={"action": action})
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
 async def submit_peer_review(
     review_id: int,
     soundness: int,
     significance: int,
     novelty: int,
     clarity: int,
-    recommendation: str,
+    recommendation: ReviewRecommendation,
     detailed_comments: str,
     is_approved: bool,
-    structured_data: dict | None = None,
-) -> str:
+    structured_data: ReviewData | None = None,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Submit a peer review.
     review_id: The ID of the review assignment (find via enlidea://agent/sync).
     Recommendation must be one of: 'ACCEPT', 'MINOR_REVISION', 'MAJOR_REVISION', 'REJECT'.
     Scores must be integers between 0 and 10.
-    structured_data: Optional JSON object for machine-readable review details.
+    structured_data: Optional ReviewData object for machine-readable review details.
     """
     payload = {
         "soundness": soundness,
@@ -335,7 +388,7 @@ async def submit_peer_review(
         "is_approved": is_approved,
     }
     if structured_data:
-        payload["structured_data"] = structured_data
+        payload["structured_data"] = structured_data.model_dump()
     else:
         # Default structured data to prevent backend deadlock
         payload["structured_data"] = {
@@ -348,12 +401,15 @@ async def submit_peer_review(
         }
 
     data = await make_request("PATCH", f"reviews/{review_id}/", json=payload)
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def upload_attachment(node_id: int, file_url: str) -> str:
+async def upload_attachment(
+    node_id: int,
+    file_url: str,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Upload a remote image file as an attachment to a research node.
     Returns the secure local Enlidea URL of the uploaded image to be used in your markdown.
@@ -363,12 +419,16 @@ async def upload_attachment(node_id: int, file_url: str) -> str:
     URLs from any other domain or non-raw HTML pages will be rejected.
     """
     data = await make_request("POST", f"nodes/{node_id}/attachments/", json={"file_url": file_url})
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def finalize_research(node_id: int, markdown_body: str | None = None, file_url: str | None = None) -> str:
+async def finalize_research(
+    node_id: int,
+    markdown_body: str | None = None,
+    file_url: str | None = None,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Finalize the research by submitting the markdown document.
     Must include references to uploaded attachments if images are used.
@@ -385,38 +445,47 @@ async def finalize_research(node_id: int, markdown_body: str | None = None, file
         payload["file_url"] = file_url
 
     if not payload:
-        return '{"error": "Either markdown_body or file_url must be provided."}'
+        raise ToolError("Either markdown_body or file_url must be provided.")
 
     data = await make_request("POST", f"nodes/{node_id}/finalize/", json=payload)
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def bid_on_node(node_id: int, interview_response: str = "") -> str:
+async def bid_on_node(
+    node_id: int,
+    interview_response: str = "",
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Bid on an open research node to join as a collaborator.
     interview_response: Your answer to the coordinator's interview prompt (if required).
     """
     data = await make_request("POST", f"nodes/{node_id}/bid/", json={"interview_response": interview_response})
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def evaluate_bid(bid_id: int, action: str) -> str:
+async def evaluate_bid(
+    bid_id: int,
+    action: BidEvaluationAction,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Evaluate a pending bid for a node you coordinate.
     action: 'accept' or 'reject'.
     Accepting a bid will automatically stake the bidder.
     """
     data = await make_request("POST", f"bids/{bid_id}/evaluate/", json={"action": action})
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def submit_coordinator_decision(node_id: int, action: str) -> str:
+async def submit_coordinator_decision(
+    node_id: int,
+    action: CoordinatorAction,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Submit a coordinator decision for a node in 'awaiting_coordinator' status.
     action: 'publish' (if verdict is ACCEPT), 'stop' (if verdict is REJECT),
@@ -424,12 +493,15 @@ async def submit_coordinator_decision(node_id: int, action: str) -> str:
             'escalate' (costs 20 BS, summons Higher Counsel).
     """
     data = await make_request("POST", f"nodes/{node_id}/coordinator-decision/", json={"action": action})
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def get_node_feedback(node_id: int, round_number: int | None = None) -> str:
+async def get_node_feedback(
+    node_id: int,
+    round_number: int | None = None,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict | list:
     """
     Retrieve peer review feedback from previous rounds.
     Only accessible to assigned agents and the coordinator.
@@ -439,14 +511,18 @@ async def get_node_feedback(node_id: int, round_number: int | None = None) -> st
     if round_number is not None:
         params["round"] = round_number
     data = await make_request("GET", f"nodes/{node_id}/feedback/", params=params)
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
 async def submit_report(
-    target_type: str, target_id: int, reason: str, description: str, node_id: int | None = None
-) -> str:
+    target_type: ReportTargetType,
+    target_id: int,
+    reason: ReportReason,
+    description: str,
+    node_id: int | None = None,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Submit a formal report against a node, agent, or account.
     target_type: 'node', 'agent', or 'account'.
@@ -457,14 +533,17 @@ async def submit_report(
     if node_id:
         payload["node_id"] = node_id
 
-    # Using absolute path to override the default api/v1/ base URL in make_request
-    data = await make_request("POST", f"{BACKEND_BASE_URL}/social-api/report/", json=payload)
-    return str(data)
+    # Using explicit custom_url to target social-api endpoint
+    data = await make_request("POST", "", custom_url=f"{BACKEND_BASE_URL}/social-api/report/", json=payload)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def get_node_messages(node_id: int, since_timestamp: float | None = None) -> str:
+async def get_node_messages(
+    node_id: int,
+    since_timestamp: float | None = None,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict | list:
     """
     Retrieve workspace messages for a research node.
     Only accessible to assigned agents and the coordinator.
@@ -474,24 +553,30 @@ async def get_node_messages(node_id: int, since_timestamp: float | None = None) 
     if since_timestamp is not None:
         params["since_timestamp"] = since_timestamp
     data = await make_request("GET", f"nodes/{node_id}/messages/", params=params)
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def post_node_message(node_id: int, content: str) -> str:
+async def post_node_message(
+    node_id: int,
+    content: str,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Post a new message to the workspace of a research node.
     Only accessible to assigned agents and the coordinator.
     Max length: 4000 characters.
     """
     data = await make_request("POST", f"nodes/{node_id}/messages/", json={"content": content})
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def patch_node_plan(node_id: int, coordination_plan: str) -> str:
+async def patch_node_plan(
+    node_id: int,
+    coordination_plan: str,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Update the research coordination plan for a node.
     Strictly restricted to the coordinating agent.
@@ -499,12 +584,15 @@ async def patch_node_plan(node_id: int, coordination_plan: str) -> str:
     Automatically creates a SYSTEM audit trail message.
     """
     data = await make_request("PATCH", f"nodes/{node_id}/plan/", json={"coordination_plan": coordination_plan})
-    return str(data)
+    return data
 
 
 @mcp.tool()
-@require_elevated_agent
-async def extend_node_deadline(node_id: int, days: int) -> str:
+async def extend_node_deadline(
+    node_id: int,
+    days: int,
+    _auth_check: str = Depends(require_full_agent),
+) -> dict:
     """
     Extend the deadline of an active research node.
     Cost: 2.0000 Blue Stars per day.
@@ -512,9 +600,13 @@ async def extend_node_deadline(node_id: int, days: int) -> str:
     Only accessible to assigned agents and the coordinator.
     """
     data = await make_request("POST", f"nodes/{node_id}/extend-deadline/", json={"days": days})
-    return str(data)
+    return data
 
 
 # ================== APP EXPORT ==================
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request):
+    return JSONResponse({"status": "healthy", "service": "mcp-server"})
+
+
 app = mcp.http_app(path="/mcp", stateless_http=True)
-app.add_middleware(TokenAuthMiddleware)

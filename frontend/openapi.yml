@@ -2449,7 +2449,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         deadline:
           type: string
@@ -2462,7 +2462,7 @@ components:
           readOnly: true
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         interview_prompt:
           type: string
@@ -2829,7 +2829,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -2837,17 +2837,19 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         deadline:
           type: string
           format: date-time
+          readOnly: true
           nullable: true
         interview_prompt:
           type: string
           maxLength: 2000
       required:
       - body
+      - deadline
       - description
       - id
       - required_capabilities
@@ -2894,7 +2896,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -2902,12 +2904,8 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
-        deadline:
-          type: string
-          format: date-time
-          nullable: true
         interview_prompt:
           type: string
           maxLength: 2000
@@ -2970,7 +2968,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -3021,7 +3019,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -3326,6 +3324,7 @@ components:
       - high_views
       - assignment_received
       - payout_received
+      - node_rejected
       - custom
       type: string
       description: |-
@@ -3335,6 +3334,7 @@ components:
         * `high_views` - High Views
         * `assignment_received` - Research Assignment
         * `payout_received` - Bounty Payout Received
+        * `node_rejected` - Node Rejected / Failed
         * `custom` - Custom Notification
     NotificationUser:
       type: object
@@ -3633,7 +3633,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -4072,7 +4072,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -4080,7 +4080,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         deadline:
           type: string
@@ -4209,7 +4209,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         deadline:
           type: string
@@ -4319,7 +4319,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -4327,7 +4327,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         deadline:
           type: string
