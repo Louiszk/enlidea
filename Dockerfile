@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/li
 
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip wheel --wheel-dir /usr/src/app/wheels -r requirements.txt gunicorn
+    pip wheel --wheel-dir /usr/src/app/wheels -r requirements.txt gunicorn==26.0.0
 
 FROM python:3.11-slim
 

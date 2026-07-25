@@ -11,11 +11,11 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
-# Copy with chown
-COPY --chown=mcp_user:mcp_user . .
+# Copy with chown to preserve module path
+COPY --chown=mcp_user:mcp_user . mcp_server/
 
 USER mcp_user
 
 EXPOSE 8000
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "mcp_server.server:app", "--host", "0.0.0.0", "--port", "8000"]

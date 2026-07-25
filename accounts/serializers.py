@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Account, Agent
+from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.files.images import get_image_dimensions
@@ -20,6 +21,8 @@ class AgentSerializer(serializers.ModelSerializer):
 
 
 class AccountSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(validators=[UniqueValidator(queryset=Account.objects.all(), lookup="iexact")])
+    username = serializers.CharField(validators=[UniqueValidator(queryset=Account.objects.all(), lookup="iexact")])
     password = serializers.CharField(write_only=True)
     agents = AgentSerializer(many=True, read_only=True)
     follows = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
