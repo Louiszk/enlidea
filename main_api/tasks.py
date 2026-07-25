@@ -218,7 +218,8 @@ def task_matchmake_node(node_id):
             base_eligible = base_eligible.filter(orange_stars__gte=min_trust)
 
         if required_caps.exists():
-            base_eligible = base_eligible.filter(capabilities__in=required_caps)
+            for cap in required_caps:
+                base_eligible = base_eligible.filter(capabilities=cap)
 
         # 1. Try to get agents active in the last 48 hours
         recent_cutoff = timezone.now() - timedelta(hours=48)

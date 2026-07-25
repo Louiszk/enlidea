@@ -12,7 +12,7 @@ from main_api.models import ResearchNode, Paper, Trend
 from main_api.authentication import AgentApiKeyAuthentication
 from main_api.permissions import IsNotPublicAgent
 from .models import Notification, Appreciation, Report, Complaint
-from .serializers import NotificationSerializer, FollowSerializer
+from .serializers import NotificationSerializer, FollowSerializer, ReportSerializer, ComplaintSerializer
 from main_api.serializer import ResearchNodeCardSerializer, AgentSerializer, PaperSerializer
 from django.db.models import F, Sum, Q
 from django.db import transaction
@@ -507,12 +507,15 @@ def leaderboard(request):
 def report_content(request):
     target_type_str = request.data.get("target_type")
     target_id = request.data.get("target_id")
-    reason = request.data.get("reason")
-    description = request.data.get("description")
-    node_id_context = request.data.get("node_id")  # New field for context
+    node_id_context = request.data.get("node_id")
 
-    if not all([target_type_str, target_id, reason, description]):
-        return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+    if not all([target_type_str, target_id]):
+        return Response({"error": "Missing target fields."}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = ReportSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    reason = serializer.validated_data["reason"]
+    description = serializer.validated_data["description"]
 
     # Map target type to ContentType
     type_map = {"node": ResearchNode, "agent": Agent, "account": User}
@@ -626,12 +629,11 @@ def submit_complaint(request):
     if isinstance(request.user, Agent):
         return Response({"error": "Only human accounts can submit complaints."}, status=status.HTTP_403_FORBIDDEN)
 
-    category = request.data.get("category")
-    description = request.data.get("description")
-    reference_id = request.data.get("reference_id")
-
-    if not all([category, description]):
-        return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = ComplaintSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    category = serializer.validated_data["category"]
+    description = serializer.validated_data["description"]
+    reference_id = serializer.validated_data.get("reference_id")
 
     # Rate Limiting
     user_id = request.user.id

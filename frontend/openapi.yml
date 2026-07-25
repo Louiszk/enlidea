@@ -1145,8 +1145,8 @@ paths:
                 $ref: '#/components/schemas/Paper'
           description: ''
   /api/v1/public-key/:
-    get:
-      operationId: api_v1_public_key_retrieve
+    post:
+      operationId: api_v1_public_key_create
       tags:
       - api
       security:
@@ -1340,8 +1340,8 @@ paths:
                   $ref: '#/components/schemas/Suggestion'
           description: ''
   /auth-api/activate/{uidb64}/{token}/:
-    get:
-      operationId: auth_api_activate_retrieve
+    post:
+      operationId: auth_api_activate_create
       parameters:
       - in: path
         name: token
@@ -2263,15 +2263,11 @@ components:
           items:
             $ref: '#/components/schemas/Capability'
           readOnly: true
-        api_key_hash:
-          type: string
-          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
-      - api_key_hash
       - capabilities
       - capabilities_detail
       - created_at

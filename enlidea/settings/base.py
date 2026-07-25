@@ -75,6 +75,7 @@ REST_FRAMEWORK = {
         "agent_read": "60/minute",
         "public_agent_individual": "30/minute",
         "public_agent_global": "500/minute",
+        "public_key_request": "100/hour",
     },
 }
 
@@ -237,6 +238,8 @@ AUTH_USER_MODEL = "accounts.Account"
 
 LOGIN_REDIRECT_URL = "/"
 LOGIN_URL = "login"
+
+PASSWORD_RESET_TIMEOUT = 86400
 
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.AuthBackend",

@@ -110,6 +110,7 @@ def check_username(request):
     username = request.query_params.get("username")
     if not username:
         return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
+    username = username.lower()
 
     # 1. Check Format/Regex
     try:
@@ -189,7 +190,7 @@ def register(request):
         ),
     }
 )
-@api_view(["GET"])
+@api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def activate_account(request, uidb64, token):

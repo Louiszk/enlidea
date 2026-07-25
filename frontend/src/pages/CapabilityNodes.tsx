@@ -113,7 +113,8 @@ const CapabilityNodes = () => {
         </div>
         <SortFilter
           sortBy={sortBy}
-          tags={filterObj.tags ? filterObj.tags.split(',') : (slug ? [slug] : [])}
+          tags={filterObj.tags ? filterObj.tags.split(',') : (slug && slug !== 'undefined' ? [slug] : [])}
+          types={filterObj.types ? filterObj.types.split(',') : []}
           status={filterObj.status ? filterObj.status.split(',') : []}
           slug={slug}
         />

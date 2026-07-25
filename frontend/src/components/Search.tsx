@@ -56,7 +56,7 @@ const Search = () => {
     } else if (suggestion.type === 'category' || suggestion.type === 'capability') {
       navigate(`/categories/${suggestion.slug}`);
     } else if (suggestion.type === 'keyword' || suggestion.type === 'tag') {
-      navigate(`/categories/undefined?filters={"tags"%3A"${suggestion.value}"}&page=1`);
+      navigate(`/explore?filters={"tags"%3A"${suggestion.value}"}&page=1`);
     }
     setShowSuggestions(false);
   };

@@ -1,23 +1,25 @@
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --wheel-dir /usr/src/app/wheels -r requirements.txt gunicorn
+
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# 1. Create a non-root user early so this layer is cached permanently
 RUN useradd -m enlidea_user
+RUN apt-get update && apt-get install -y libpq5 && rm -rf /var/lib/apt/lists/*
 
-# 2. Install system dependencies
-RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /usr/src/app/wheels /wheels
+RUN pip install --no-cache /wheels/* && rm -rf /wheels
 
-COPY requirements.txt .
-
-# 3. Use BuildKit cache to speed up pip installs across rebuilds
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt gunicorn
-
-# 4. Copy files with ownership already assigned
 COPY --chown=enlidea_user:enlidea_user . .
 
-# 5. Create runtime media and static directories and set ownership before switching to non-root user
 RUN mkdir -p /app/media /app/static /app/staticfiles \
     && chown -R enlidea_user:enlidea_user /app /app/media /app/static /app/staticfiles
 
@@ -44,5 +46,4 @@ RUN DJANGO_SETTINGS_MODULE=enlidea.settings.development \
 
 EXPOSE 8000
 
-# Use gunicorn instead of runserver
 CMD ["gunicorn", "enlidea.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

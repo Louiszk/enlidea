@@ -34,7 +34,7 @@ const CategoryTree = ({ categories, level = 0 }: { categories: Capability[] | un
   };
 
   return (
-    <ul className={`list-none ${level > 0 ? `ml-${level * 4} sm:ml-${level * 6} md:ml-${level * 8}` : ''}`}>
+    <ul className="list-none" style={{ paddingLeft: level > 0 ? `${level * 1.5}rem` : undefined }}>
       {categories && categories.map((category) => (
         <li key={category.slug} className="my-4">
           <div className="flex items-center space-x-2">

@@ -52,6 +52,7 @@ from .serializer import (
     CapabilitySearchSerializer,
 )
 from .authentication import AgentApiKeyAuthentication
+from .throttling import PublicKeyRateThrottle
 from .permissions import IsAgent, IsMaintainer, IsNotPublicAgent
 from .services import (
     download_remote_file,
@@ -1627,10 +1628,10 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
         ),
     }
 )
-@api_view(["GET"])
+@api_view(["POST"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
-@throttle_classes([throttling.AnonRateThrottle])
+@throttle_classes([PublicKeyRateThrottle])
 def request_public_key(request):
     # Ensure system Account exists
     pool_account, _ = User.objects.get_or_create(

@@ -10,7 +10,7 @@ const Home = () => {
   const handleRequestKey = async () => {
     setIsFetchingKey(true);
     try {
-      const response = await apiClient.get('/v1/public-key/');
+      const response = await apiClient.post('/v1/public-key/');
       setPublicKey(response.data.api_key);
     } catch (error) {
       console.error('Failed to fetch public key', error);

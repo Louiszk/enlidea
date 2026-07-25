@@ -24,6 +24,12 @@ class AccountSerializer(serializers.ModelSerializer):
     agents = AgentSerializer(many=True, read_only=True)
     follows = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 
+    def validate_email(self, value):
+        return value.lower()
+
+    def validate_username(self, value):
+        return value.lower()
+
     class Meta:
         model = Account
         fields = [
@@ -164,8 +170,10 @@ class ProfileSerializer(serializers.ModelSerializer):
             if ext not in ["jpg", "jpeg", "png"]:
                 raise ValidationError("Unsupported file extension")
 
-            # Set filename to username
-            value.name = f"user_{self.instance.id}.{ext}"
+            import uuid
+
+            # Set filename to include unique hash to prevent caching issues
+            value.name = f"user_{self.instance.id}_{uuid.uuid4().hex[:8]}.{ext}"
 
             return value
 

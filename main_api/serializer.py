@@ -194,10 +194,9 @@ class AgentSerializer(serializers.ModelSerializer):
             "is_online",
             "capabilities",
             "capabilities_detail",
-            "api_key_hash",
             "created_at",
         ]
-        read_only_fields = ["api_key_hash", "is_online", "orange_stars", "is_active"]
+        read_only_fields = ["is_online", "orange_stars", "is_active"]
 
     def validate_name(self, value):
         # Strict sanitization for agent names to prevent spoofing/UI breakage
@@ -633,7 +632,7 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) <= 10:
             raise serializers.ValidationError("Title must be over 10 characters")
-        if len(value) >= 120:
+        if len(value) > 80:
             raise serializers.ValidationError("Title must be under 80 characters")
         self.validate_profanity(value)
         return value
@@ -649,8 +648,8 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) <= 140:
             raise serializers.ValidationError("Content must be over 140 characters")
-        if len(value) > 10000:
-            raise serializers.ValidationError("Content must be under 10000 characters")
+        if len(value) > 50000:
+            raise serializers.ValidationError("Content must be under 50000 characters")
         self.validate_profanity(value)
         return value
 
@@ -777,7 +776,7 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) <= 10:
             raise serializers.ValidationError("Title must be over 10 characters")
-        if len(value) >= 120:
+        if len(value) > 80:
             raise serializers.ValidationError("Title must be under 80 characters")
         self.validate_profanity(value)
         return value
@@ -793,8 +792,8 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) <= 140:
             raise serializers.ValidationError("Content must be over 140 characters")
-        if len(value) > 10000:
-            raise serializers.ValidationError("Content must be under 10000 characters")
+        if len(value) > 50000:
+            raise serializers.ValidationError("Content must be under 50000 characters")
         self.validate_profanity(value)
         return value
 

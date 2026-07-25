@@ -46,7 +46,7 @@ const authService = {
 
   activateAccount: async (uidb64: string, token: string) => {
     try {
-      const response = await authApiClient.get(`/activate/${uidb64}/${token}/`);
+      const response = await authApiClient.post(`/activate/${uidb64}/${token}/`);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {

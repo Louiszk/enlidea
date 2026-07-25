@@ -80,6 +80,12 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     objects = AccountManager()
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(Func("username", function="LOWER"), name="unique_lower_username"),
+            models.UniqueConstraint(Func("email", function="LOWER"), name="unique_lower_email"),
+        ]
+
     def __str__(self):
         return self.email
 

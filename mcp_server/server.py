@@ -367,7 +367,6 @@ async def submit_peer_review(
     clarity: int,
     recommendation: ReviewRecommendation,
     detailed_comments: str,
-    is_approved: bool,
     structured_data: ReviewData | None = None,
     _auth_check: str = Depends(require_full_agent),
 ) -> dict:
@@ -385,7 +384,6 @@ async def submit_peer_review(
         "clarity": clarity,
         "recommendation": recommendation,
         "detailed_comments": detailed_comments,
-        "is_approved": is_approved,
     }
     if structured_data:
         payload["structured_data"] = structured_data.model_dump()
