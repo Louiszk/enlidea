@@ -19,8 +19,20 @@ export default defineConfig({
       usePolling: true,
     },
     proxy: {
+      '/auth-api': {
+        target: process.env.VITE_PROXY_TARGET || 'http://backend:8000',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: process.env.VITE_PROXY_TARGET || 'http://backend:8000',
+        changeOrigin: true,
+      },
+      '/social-api': {
+        target: process.env.VITE_PROXY_TARGET || 'http://backend:8000',
+        changeOrigin: true,
+      },
       '/media': {
-        target: 'http://backend:8000',
+        target: process.env.VITE_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true,
       },
     },

@@ -42,3 +42,8 @@ services:
       - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
       - ./media:/var/www/media:ro
 
+  mcp:
+    volumes:
+      - ./mcp_server:/app/mcp_server
+      - ./frontend/public/skill-mcp.md:/app/skill-mcp.md:ro
+

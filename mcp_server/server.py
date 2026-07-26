@@ -20,13 +20,20 @@ FRONTEND_URL = os.getenv("ENLIDEA_FRONTEND_URL", "http://frontend:5173")
 
 def get_agent_key() -> str:
     """Extracts the Bearer token natively from current MCP request headers."""
-    headers = get_http_headers() or {}
+    headers = get_http_headers(include_all=True) or {}
     auth_header = headers.get("authorization", "") or headers.get("Authorization", "")
+    agent_key_header = headers.get("x-agent-api-key", "") or headers.get("X-Agent-Api-Key", "")
 
-    if not auth_header or not auth_header.startswith("Bearer "):
+    if auth_header:
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+        else:
+            token = auth_header.strip()
+    elif agent_key_header:
+        token = agent_key_header.strip()
+    else:
         raise ToolError("Missing or invalid Authorization header. Expected Bearer token.")
 
-    token = auth_header.split(" ", 1)[1].strip()
     if not token:
         raise ToolError("Missing or invalid Authorization header. Empty Bearer token.")
     return token
@@ -85,10 +92,22 @@ async def make_request(
     headers = kwargs.pop("headers", {})
     headers["Accept"] = "application/json"
 
-    req_headers = get_http_headers() or {}
+    req_headers = get_http_headers(include_all=True) or {}
     auth_header = req_headers.get("authorization", "") or req_headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        headers["X-AGENT-API-KEY"] = auth_header.split(" ", 1)[1].strip()
+    agent_key = req_headers.get("x-agent-api-key", "") or req_headers.get("X-Agent-Api-Key", "")
+
+    if auth_header:
+        if auth_header.lower().startswith("bearer "):
+            agent_key = auth_header.split(" ", 1)[1].strip()
+        else:
+            agent_key = auth_header.strip()
+
+    if agent_key:
+        headers["X-AGENT-API-KEY"] = agent_key
+    elif not is_tool and endpoint.startswith("agents/sync"):
+        raise ResourceError(
+            "Missing Agent API key. Please provide your API key in the 'Authorization: Bearer <agent_key>' header in your MCP settings."
+        )
 
     request_url = custom_url if custom_url else endpoint.lstrip("/")
     response = await http_client.request(method, request_url, headers=headers, **kwargs)
@@ -152,49 +171,49 @@ async def make_request(
 
 # ================== RESOURCES ==================
 @mcp.resource("enlidea://agent/sync")
-async def sync_agent() -> dict:
+async def sync_agent() -> Any:
     """Sync the agent state from the backend (balances, directives, assignments, and PENDING REVIEWS with review_ids)."""
     data = await make_request("GET", "agents/sync/", is_tool=False)
     return data
 
 
 @mcp.resource("enlidea://nodes/open")
-async def get_open_nodes() -> dict:
+async def get_open_nodes() -> Any:
     """Get open research nodes available for bidding."""
     data = await make_request("GET", "nodes/?status=open", is_tool=False)
     return data
 
 
 @mcp.resource("enlidea://nodes/{node_id}")
-async def get_node_details(node_id: int) -> dict:
+async def get_node_details(node_id: int) -> Any:
     """Get full details of a specific research node, including the interview prompt and full description."""
     data = await make_request("GET", f"nodes/{node_id}/", is_tool=False)
     return data
 
 
 @mcp.resource("enlidea://papers")
-async def get_papers() -> dict:
+async def get_papers() -> Any:
     """Get published papers."""
     data = await make_request("GET", "papers/", is_tool=False)
     return data
 
 
 @mcp.resource("enlidea://node-types")
-async def get_node_types() -> dict | list:
+async def get_node_types() -> Any:
     """Get all available research node types (e.g. 'Research Node')."""
     data = await make_request("GET", "node-types/", is_tool=False)
     return data
 
 
 @mcp.resource("enlidea://nodes/{node_id}/bids")
-async def get_node_bids(node_id: int) -> dict | list:
+async def get_node_bids(node_id: int) -> Any:
     """Get pending bids for a specific node. Only accessible to the coordinator."""
     data = await make_request("GET", f"nodes/{node_id}/bids/", is_tool=False)
     return data
 
 
 @mcp.resource("enlidea://capabilities")
-async def get_capabilities() -> dict | list:
+async def get_capabilities() -> Any:
     """Get all available capabilities and their IDs for node creation."""
     data = await make_request("GET", "capabilities/", is_tool=False)
     return data
@@ -206,15 +225,21 @@ async def get_skill_mcp() -> str:
     import os
     import httpx
 
-    # First try reading locally if running outside Docker
-    local_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "skill-mcp.md")
-    if os.path.exists(local_path):
-        with open(local_path, "r", encoding="utf-8") as f:
+    # 1. Read skill-mcp.md from container root volume mount (/app/skill-mcp.md)
+    container_mount_path = "/app/skill-mcp.md"
+    if os.path.exists(container_mount_path):
+        with open(container_mount_path, "r", encoding="utf-8") as f:
             return f.read()
 
-    # Fallback to fetching from the frontend container if inside Docker
+    # 2. Read co-located skill-mcp.md inside mcp_server/ directory
+    local_mcp_path = os.path.join(os.path.dirname(__file__), "skill-mcp.md")
+    if os.path.exists(local_mcp_path):
+        with open(local_mcp_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    # 2. Fallback to fetching from frontend container URL
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{FRONTEND_URL}/skill-mcp.md")
             response.raise_for_status()
             return response.text

@@ -156,7 +156,7 @@ const SearchResults = () => {
       {capabilities.length > 0 && (
         <div className="mb-12">
           <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
-            <CapabilityIcon className="text-green-400" /> Capabilities
+            <CapabilityIcon className="w-6 h-6 text-green-400" /> Capabilities
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {capabilities.map((capability, index) => renderCard(capability, index))}
@@ -167,7 +167,7 @@ const SearchResults = () => {
       {users.length > 0 && (
         <div className="mb-12">
           <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
-            <UserIcon className="text-indigo-400" /> Maintainers
+            <UserIcon className="w-6 h-6 text-indigo-400" /> Maintainers
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {users.map((user, index) => renderCard(user, index))}
@@ -178,7 +178,7 @@ const SearchResults = () => {
       {papers.length > 0 && (
         <div className="mb-12">
           <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
-            <RatedIcon className="text-purple-400" /> Published Papers
+            <RatedIcon className="w-6 h-6 text-purple-400" /> Published Papers
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {papers.map((paper) => (
@@ -191,7 +191,7 @@ const SearchResults = () => {
       {nodes.length > 0 && (
       <div className="mb-12">
         <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
-          <NodeIcon className="text-yellow-400" /> Work in Progress
+          <NodeIcon className="w-6 h-6 text-yellow-400" /> Work in Progress
         </h2>
         <VirtualizedList
           items={nodes}

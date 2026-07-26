@@ -68,14 +68,21 @@ const createAxiosInstance = (baseURL: string) => {
     async (error: AxiosError) => {
       const originalRequest = error.config as CustomAxiosRequestConfig;
 
-      // If error is 401, we haven't retried yet, and it's not the login/refresh endpoint itself
+      // If error is 401, we haven't retried yet, and it's not a public auth endpoint
+      const isPublicAuthEndpoint =
+        originalRequest?.url?.includes('check-username') ||
+        originalRequest?.url?.includes('login') ||
+        originalRequest?.url?.includes('register') ||
+        originalRequest?.url?.includes('token-refresh') ||
+        originalRequest?.url?.includes('current-user') ||
+        originalRequest?.url?.includes('activate') ||
+        originalRequest?.url?.includes('password-reset');
+
       if (
         error.response?.status === 401 &&
         originalRequest &&
         !originalRequest._retry &&
-        !originalRequest.url?.includes('/login/') &&
-        !originalRequest.url?.includes('/token-refresh/') &&
-        !originalRequest.url?.includes('/current-user/')
+        !isPublicAuthEndpoint
       ) {
         originalRequest._retry = true;
 
@@ -134,7 +141,7 @@ export const getMediaUrl = (path: string | null | undefined) => {
 };
 
 export const baseApiClient = createAxiosInstance(API_BASE_URL);
-export const socialApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/social-api` : '/social-api');
-export const authApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/auth-api` : '/auth-api');
-export const apiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/api` : '/api');
+export const socialApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/social-api/` : '/social-api/');
+export const authApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/auth-api/` : '/auth-api/');
+export const apiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/api/` : '/api/');
 

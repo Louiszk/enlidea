@@ -95,8 +95,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
   };
 
+  const isValidUser = user && typeof user === 'object' && 'id' in user && typeof (user as Account).id === 'number' && (user as Account).id > 0;
+
   const value: AuthContextType = {
-    user: user as Account | undefined,
+    user: isValidUser ? (user as Account) : null,
     loading: isUserLoading,
     login: loginMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
@@ -121,6 +123,7 @@ export const useAuth = (): AuthContextType => {
   return context;
 };
 
+export { AuthContext };
 export default AuthContext;
 
 

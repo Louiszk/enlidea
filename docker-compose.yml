@@ -138,6 +138,8 @@ services:
     image: ${MCP_IMAGE:-enlidea-mcp:1.1.0}
     build:
       context: ./mcp_server
+    volumes:
+      - ./frontend/public/skill-mcp.md:/app/skill-mcp.md:ro
     env_file:
       - .env
     environment:

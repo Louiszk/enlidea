@@ -104,6 +104,7 @@ def set_password_reset_email_sent(user_id):
     },
 )
 @api_view(["GET"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([UsernameCheckThrottle])
 def check_username(request):
@@ -149,6 +150,7 @@ def check_username(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def register(request):
     password_serializer = PasswordSerializer(data=request.data)
@@ -273,6 +275,7 @@ def activate_account(request, uidb64, token):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def login_view(request):
     email = request.data.get("email") if isinstance(request.data, dict) else None
@@ -352,6 +355,7 @@ def login_view(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def resend_activation(request):
     serializer = EmailSerializer(data=request.data)
@@ -384,6 +388,7 @@ def resend_activation(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def password_reset(request):
     serializer = EmailSerializer(data=request.data)
@@ -422,6 +427,7 @@ def password_reset(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def password_reset_confirm(request, uidb64, token):
     try:

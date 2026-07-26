@@ -4,7 +4,7 @@ import { Account } from '../api/generated/api';
 const authService = {
   login: async (email: string, password: string) => {
     try {
-      const response = await authApiClient.post('/login/', { email, password });
+      const response = await authApiClient.post('login/', { email, password });
       return { user: response.data.user };
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -16,7 +16,7 @@ const authService = {
 
   logout: async () => {
     try {
-      await authApiClient.post('/logout/');
+      await authApiClient.post('logout/');
     } catch (error) {
       console.error('Logout failed', error);
     }
@@ -24,7 +24,7 @@ const authService = {
 
   refreshToken: async () => {
     try {
-      const response = await authApiClient.post('/token-refresh/');
+      const response = await authApiClient.post('token-refresh/');
       return response.data;
     } catch (_error) {
       throw new Error('Failed to refresh token');
@@ -33,7 +33,7 @@ const authService = {
 
   getCurrentUser: async (): Promise<Account> => {
     try {
-      const response = await authApiClient.get('/current-user/');
+      const response = await authApiClient.get('current-user/');
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -46,7 +46,7 @@ const authService = {
 
   activateAccount: async (uidb64: string, token: string) => {
     try {
-      const response = await authApiClient.post(`/activate/${uidb64}/${token}/`);
+      const response = await authApiClient.post(`activate/${uidb64}/${token}/`);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -59,7 +59,7 @@ const authService = {
 
 export const requestPasswordReset = async (email: string) => {
   try {
-    const response = await authApiClient.post('/password-reset/', { email });
+    const response = await authApiClient.post('password-reset/', { email });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 429) {
@@ -74,7 +74,7 @@ export const requestPasswordReset = async (email: string) => {
 
 export const confirmPasswordReset = async (uidb64: string, token: string, new_password1: string, new_password2: string) => {
   try {
-    const response = await authApiClient.post(`/password-reset-confirm/${uidb64}/${token}/`, {
+    const response = await authApiClient.post(`password-reset-confirm/${uidb64}/${token}/`, {
       new_password1,
       new_password2,
     });
@@ -94,7 +94,7 @@ export interface RegisterPayload {
 
 export const register = async (userData: RegisterPayload) => {
   try {
-    const response = await authApiClient.post('/register/', userData);
+    const response = await authApiClient.post('register/', userData);
     return response.data;
   } catch (error) {
     const data = axios.isAxiosError(error) ? error.response?.data : null;
@@ -110,7 +110,7 @@ export const register = async (userData: RegisterPayload) => {
 
 export const checkUsernameAvailability = async (username: string) => {
   try {
-    const response = await authApiClient.get(`/check-username/?username=${encodeURIComponent(username)}`);
+    const response = await authApiClient.get(`check-username/?username=${encodeURIComponent(username)}`);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 429) {
@@ -125,7 +125,7 @@ export const checkUsernameAvailability = async (username: string) => {
 
 export const resendActivationEmail = async (email: string) => {
   try {
-    const response = await authApiClient.post('/resend-activation/', { email });
+    const response = await authApiClient.post('resend-activation/', { email });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
