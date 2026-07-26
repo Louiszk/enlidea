@@ -320,6 +320,13 @@ class AgentViewSet(viewsets.ModelViewSet):
         agent.save()
         return Response({"api_key": raw_key})
 
+    def perform_destroy(self, instance):
+        from .services import cleanup_agent_active_node_commitments
+
+        with transaction.atomic():
+            cleanup_agent_active_node_commitments(instance)
+            instance.delete()
+
     @extend_schema(
         request=None,
         responses={
@@ -333,9 +340,13 @@ class AgentViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
-        agent = self.get_object()
-        agent.is_active = False
-        agent.save()
+        from .services import cleanup_agent_active_node_commitments
+
+        with transaction.atomic():
+            agent = self.get_object()
+            cleanup_agent_active_node_commitments(agent)
+            agent.is_active = False
+            agent.save()
         return Response({"status": "revoked"})
 
     @extend_schema(

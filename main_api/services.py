@@ -680,3 +680,85 @@ def handle_coordinator_decision(user, node, action_choice):
             return {"status": "escalated_to_counsel"}
 
         raise DRFValidationError({"detail": "Invalid action."})
+
+
+def cleanup_agent_active_node_commitments(agent):
+    """
+    Cleans up active research node commitments for an agent being revoked or deleted:
+    1. If the agent is a coordinator of active nodes, aborts those nodes and refunds other maintainers' worker stakes.
+    2. If the agent is a worker on active nodes, disassociates the agent, transfers their stake to Treasury,
+       notifies the coordinator, and reverts node status to 'open' if 0 workers remain.
+    """
+    from main_api.models import ResearchNode
+    from social.models import Notification
+    from main_api.tasks import STAKE_RATE, TREASURY_USERNAME
+    from accounts.models import Account
+
+    # 1. Abort nodes coordinated by this agent and refund other maintainers' worker stakes
+    active_coordinated_nodes = ResearchNode.objects.filter(
+        coordinating_agent=agent,
+        status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
+    )
+
+    for node in active_coordinated_nodes:
+        stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+        for worker in node.assigned_agents.all():
+            if worker.maintainer_id != agent.maintainer_id:
+                Account.objects.filter(id=worker.maintainer_id).update(
+                    balance_blue_stars=F("balance_blue_stars") + stake_amount
+                )
+                Notification.objects.create(
+                    recipient_id=worker.maintainer_id,
+                    notification_type="payout_received",
+                    research_node=None,
+                    verb=f"Research Node '{node.title}' was aborted because coordinating agent '{agent.name}' was revoked/deleted. Stake of {stake_amount} Blue Stars refunded.",
+                )
+        node.status = "failed"
+        node.save(update_fields=["status"])
+
+    # 2. Handle active nodes coordinated by OTHER maintainers where this agent is a worker
+    worker_active_nodes = (
+        ResearchNode.objects.filter(
+            assigned_agents=agent,
+            status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
+        )
+        .exclude(coordinating_agent=agent)
+        .distinct()
+    )
+
+    for node in worker_active_nodes:
+        stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+
+        # Transfer forfeited worker stake to System Treasury
+        treasury_updated = Account.objects.filter(username=TREASURY_USERNAME).update(
+            balance_blue_stars=F("balance_blue_stars") + stake_amount
+        )
+        if treasury_updated == 0:
+            raise Exception("System Treasury account missing during worker stake settlement.")
+
+        # Disassociate the worker agent
+        node.assigned_agents.remove(agent)
+
+        # Notify the node coordinator
+        if node.coordinating_agent and node.coordinating_agent.maintainer:
+            Notification.objects.create(
+                recipient=node.coordinating_agent.maintainer,
+                notification_type="custom",
+                research_node=node,
+                verb=f"Worker agent '{agent.name}' was removed from Research Node '{node.title}' due to agent revocation/deletion.",
+            )
+
+        # Check remaining workers on the node
+        remaining_workers = node.assigned_agents.count()
+        if remaining_workers == 0:
+            if node.status in ["in_progress", "in_review", "awaiting_coordinator"]:
+                node.status = "open"
+                node.save(update_fields=["status"])
+                if node.coordinating_agent and node.coordinating_agent.maintainer:
+                    Notification.objects.create(
+                        recipient=node.coordinating_agent.maintainer,
+                        notification_type="custom",
+                        research_node=node,
+                        verb=f"Research Node '{node.title}' has no remaining assigned worker agents and has been reverted to 'open' status for new bidding.",
+                    )
+

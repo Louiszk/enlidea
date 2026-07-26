@@ -222,84 +222,11 @@ def delete_account(request):
         return Response({"error": "Invalid password"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        from main_api.models import ResearchNode
-        from social.models import Notification
-        from django.db import transaction
-        from django.db.models import F
-        from decimal import Decimal
-        from main_api.tasks import STAKE_RATE, TREASURY_USERNAME
-        from accounts.models import Account
+        from main_api.services import cleanup_agent_active_node_commitments
 
         with transaction.atomic():
-            # 1. Abort and refund workers for any active nodes coordinated by this user
-            active_nodes = ResearchNode.objects.filter(
-                coordinating_agent__maintainer=user,
-                status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
-            )
-
-            for node in active_nodes:
-                stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
-                for agent in node.assigned_agents.all():
-                    if agent.maintainer_id != user.id:
-                        Account.objects.filter(id=agent.maintainer_id).update(
-                            balance_blue_stars=F("balance_blue_stars") + stake_amount
-                        )
-                        Notification.objects.create(
-                            recipient_id=agent.maintainer_id,
-                            notification_type="payout_received",
-                            research_node=None,
-                            verb=f"Research Node '{node.title}' was aborted by the coordinator. Stake of {stake_amount} Blue Stars refunded.",
-                        )
-
-            # 2. Handle active nodes coordinated by OTHER maintainers where this user's agents are workers
-            worker_active_nodes = (
-                ResearchNode.objects.filter(
-                    assigned_agents__maintainer=user,
-                    status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
-                )
-                .exclude(coordinating_agent__maintainer=user)
-                .distinct()
-            )
-
-            for node in worker_active_nodes:
-                user_worker_agents = list(node.assigned_agents.filter(maintainer=user))
-                stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
-
-                for agent in user_worker_agents:
-                    # Transfer forfeited worker stake to System Treasury
-                    treasury_updated = Account.objects.filter(username=TREASURY_USERNAME).update(
-                        balance_blue_stars=F("balance_blue_stars") + stake_amount
-                    )
-                    if treasury_updated == 0:
-                        raise Exception("System Treasury account missing during worker stake settlement.")
-
-                    # Disassociate the worker agent
-                    node.assigned_agents.remove(agent)
-
-                    # Notify the node coordinator
-                    if node.coordinating_agent and node.coordinating_agent.maintainer:
-                        Notification.objects.create(
-                            recipient=node.coordinating_agent.maintainer,
-                            notification_type="custom",
-                            research_node=node,
-                            verb=f"Worker agent '{agent.name}' was removed from Research Node '{node.title}' due to maintainer account deletion.",
-                        )
-
-                # Check remaining workers on the node
-                remaining_workers = node.assigned_agents.count()
-                if remaining_workers == 0:
-                    if node.status in ["in_progress", "in_review", "awaiting_coordinator"]:
-                        node.status = "open"
-                        node.save(update_fields=["status"])
-                        if node.coordinating_agent and node.coordinating_agent.maintainer:
-                            Notification.objects.create(
-                                recipient=node.coordinating_agent.maintainer,
-                                notification_type="custom",
-                                research_node=node,
-                                verb=f"Research Node '{node.title}' has no remaining assigned worker agents and has been reverted to 'open' status for new bidding.",
-                            )
-
-            # 3. Delete the user account (which will cascade and delete the user's agents and coordinated nodes)
+            for agent in user.agents.all():
+                cleanup_agent_active_node_commitments(agent)
             user.delete()
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:
