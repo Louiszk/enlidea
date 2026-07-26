@@ -212,3 +212,85 @@ class MaintainerAuthTests(TestCase):
                 finally:
                     task.pop_request()
             self.assertTrue(any("METRIC email_delivery_failure" in log for log in cm.output))
+
+    def test_delete_account_worker_disassociation(self):
+        from accounts.models import Agent
+        from main_api.models import ResearchNode
+        from main_api.tasks import TREASURY_USERNAME
+        from decimal import Decimal
+        import hashlib
+
+        # 1. Create Treasury
+        treasury, _ = Account.objects.get_or_create(
+            username=TREASURY_USERNAME, defaults={"email": "treasury@example.com", "balance_blue_stars": Decimal("100.0000")}
+        )
+
+        # 2. Coordinator Account and Agent
+        coordinator_account = Account.objects.create_user(
+            email="coord@example.com", username="coordinator", password="SecurePassword123!", is_active=True
+        )
+        coord_agent = Agent.objects.create(
+            name="CoordAgent",
+            maintainer=coordinator_account,
+            api_key_hash=hashlib.sha256(b"coord_key").hexdigest(),
+        )
+
+        # 3. Worker Account and Agent (to be deleted)
+        worker_account = Account.objects.create_user(
+            email="worker@example.com", username="worker", password="SecurePassword123!", is_active=True
+        )
+        worker_agent = Agent.objects.create(
+            name="WorkerAgent",
+            maintainer=worker_account,
+            api_key_hash=hashlib.sha256(b"worker_key").hexdigest(),
+        )
+
+        # 4. Remaining Worker Account and Agent
+        other_worker_account = Account.objects.create_user(
+            email="otherworker@example.com", username="otherworker", password="SecurePassword123!", is_active=True
+        )
+        other_worker_agent = Agent.objects.create(
+            name="OtherWorkerAgent",
+            maintainer=other_worker_account,
+            api_key_hash=hashlib.sha256(b"other_worker_key").hexdigest(),
+        )
+
+        # Create active node with 2 assigned agents
+        node = ResearchNode.objects.create(
+            title="Active Collaboration Node",
+            description="Testing worker disassociation",
+            body="Body text",
+            coordinating_agent=coord_agent,
+            bounty_amount=Decimal("10.0000"),
+            status="in_progress",
+            required_collaborators=2,
+        )
+        node.assigned_agents.set([worker_agent, other_worker_agent])
+
+        # Delete worker_account
+        self.client.force_authenticate(user=worker_account)
+        res = self.client.delete("/auth-api/settings/delete-account/", {"password": "SecurePassword123!"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        # Refresh node and treasury
+        node.refresh_from_db()
+        treasury.refresh_from_db()
+
+        # Worker agent should be disassociated
+        self.assertNotIn(worker_agent, node.assigned_agents.all())
+        # Node should still have remaining worker and remain in_progress
+        self.assertEqual(node.assigned_agents.count(), 1)
+        self.assertIn(other_worker_agent, node.assigned_agents.all())
+        self.assertEqual(node.status, "in_progress")
+
+        # Treasury balance increased by stake (10 * 0.10 = 1.0000 -> min 2.0000)
+        self.assertEqual(treasury.balance_blue_stars, Decimal("102.0000"))
+
+        # Test deleting remaining worker account reverts status to 'open' when count drops to 0
+        self.client.force_authenticate(user=other_worker_account)
+        res2 = self.client.delete("/auth-api/settings/delete-account/", {"password": "SecurePassword123!"}, format="json")
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+
+        node.refresh_from_db()
+        self.assertEqual(node.assigned_agents.count(), 0)
+        self.assertEqual(node.status, "open")
