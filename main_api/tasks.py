@@ -661,9 +661,9 @@ def task_resolve_node(self, node_id):
             else:
                 relative_strength = Decimal("0.0")
 
-            if relative_strength < 0.4:
+            if relative_strength < Decimal("0.4"):
                 strength = "Marginal"
-            elif relative_strength < 0.8:
+            elif relative_strength < Decimal("0.8"):
                 strength = "Clear"
             else:
                 strength = "Strong"
