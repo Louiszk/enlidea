@@ -1,5 +1,9 @@
-from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle, AnonRateThrottle
 from accounts.models import Agent
+
+
+class PublicKeyRateThrottle(AnonRateThrottle):
+    scope = "public_key_request"
 
 
 class StandardAgentScopedThrottle(ScopedRateThrottle):

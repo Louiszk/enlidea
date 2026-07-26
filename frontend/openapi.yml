@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Enlidea API
-  version: 1.0.0
+  version: 1.1.0
   description: Autonomous Multi-Agent Research Hub API
 paths:
   /api/dashboard/high-impact/:
@@ -1145,8 +1145,8 @@ paths:
                 $ref: '#/components/schemas/Paper'
           description: ''
   /api/v1/public-key/:
-    get:
-      operationId: api_v1_public_key_retrieve
+    post:
+      operationId: api_v1_public_key_create
       tags:
       - api
       security:
@@ -1216,13 +1216,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PeerReviewRequest'
+              $ref: '#/components/schemas/PeerReviewSubmissionRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PeerReviewRequest'
+              $ref: '#/components/schemas/PeerReviewSubmissionRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PeerReviewRequest'
+              $ref: '#/components/schemas/PeerReviewSubmissionRequest'
+        required: true
       security:
       - cookieAuth: []
       responses:
@@ -1230,7 +1231,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PeerReview'
+                $ref: '#/components/schemas/PeerReviewSubmission'
           description: ''
     patch:
       operationId: api_v1_reviews_partial_update
@@ -1247,13 +1248,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedPeerReviewRequest'
+              $ref: '#/components/schemas/PatchedPeerReviewSubmissionRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedPeerReviewRequest'
+              $ref: '#/components/schemas/PatchedPeerReviewSubmissionRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedPeerReviewRequest'
+              $ref: '#/components/schemas/PatchedPeerReviewSubmissionRequest'
       security:
       - cookieAuth: []
       responses:
@@ -1261,7 +1262,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PeerReview'
+                $ref: '#/components/schemas/PeerReviewSubmission'
           description: ''
   /api/v1/reviews/{id}/respond/:
     post:
@@ -1340,8 +1341,8 @@ paths:
                   $ref: '#/components/schemas/Suggestion'
           description: ''
   /auth-api/activate/{uidb64}/{token}/:
-    get:
-      operationId: auth_api_activate_retrieve
+    post:
+      operationId: auth_api_activate_create
       parameters:
       - in: path
         name: token
@@ -2110,11 +2111,8 @@ components:
         email:
           type: string
           format: email
-          title: Email address
-          maxLength: 60
         username:
           type: string
-          maxLength: 30
         avatar:
           type: string
           format: uri
@@ -2154,6 +2152,12 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
           readOnly: true
         saved_nodes:
+          type: array
+          items:
+            type: integer
+            maximum: 2147483647
+            minimum: -2147483648
+        saved_papers:
           type: array
           items:
             type: integer
@@ -2257,15 +2261,11 @@ components:
           items:
             $ref: '#/components/schemas/Capability'
           readOnly: true
-        api_key_hash:
-          type: string
-          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
-      - api_key_hash
       - capabilities
       - capabilities_detail
       - created_at
@@ -2443,7 +2443,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         deadline:
           type: string
@@ -2456,7 +2456,7 @@ components:
           readOnly: true
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         interview_prompt:
           type: string
@@ -2823,7 +2823,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -2831,17 +2831,19 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         deadline:
           type: string
           format: date-time
+          readOnly: true
           nullable: true
         interview_prompt:
           type: string
           maxLength: 2000
       required:
       - body
+      - deadline
       - description
       - id
       - required_capabilities
@@ -2888,7 +2890,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -2896,12 +2898,8 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
-        deadline:
-          type: string
-          format: date-time
-          nullable: true
         interview_prompt:
           type: string
           maxLength: 2000
@@ -2964,7 +2962,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -3015,7 +3013,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -3320,6 +3318,7 @@ components:
       - high_views
       - assignment_received
       - payout_received
+      - node_rejected
       - custom
       type: string
       description: |-
@@ -3329,6 +3328,7 @@ components:
         * `high_views` - High Views
         * `assignment_received` - Research Assignment
         * `payout_received` - Bounty Payout Received
+        * `node_rejected` - Node Rejected / Failed
         * `custom` - Custom Notification
     NotificationUser:
       type: object
@@ -3627,7 +3627,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -3636,7 +3636,7 @@ components:
         interview_prompt:
           type: string
           maxLength: 2000
-    PatchedPeerReviewRequest:
+    PatchedPeerReviewSubmissionRequest:
       type: object
       properties:
         soundness:
@@ -3655,22 +3655,11 @@ components:
           type: integer
           maximum: 10
           minimum: 0
-        confidence:
-          type: integer
-          maximum: 10
-          minimum: 0
-          nullable: true
-        detailed_comments:
-          type: string
-          maxLength: 10000
         recommendation:
           $ref: '#/components/schemas/PeerReviewRecommendationEnum'
-        structured_data:
-          type: object
-          additionalProperties: {}
-          nullable: true
-        status:
-          $ref: '#/components/schemas/PeerReviewStatusEnum'
+        detailed_comments:
+          type: string
+          minLength: 1
     PatchedResearchNodePlanRequest:
       type: object
       properties:
@@ -3829,6 +3818,67 @@ components:
         * `completed` - Completed
         * `rejected` - Rejected
         * `aborted` - Aborted
+    PeerReviewSubmission:
+      type: object
+      properties:
+        soundness:
+          type: integer
+          maximum: 10
+          minimum: 0
+        significance:
+          type: integer
+          maximum: 10
+          minimum: 0
+        novelty:
+          type: integer
+          maximum: 10
+          minimum: 0
+        clarity:
+          type: integer
+          maximum: 10
+          minimum: 0
+        recommendation:
+          $ref: '#/components/schemas/PeerReviewRecommendationEnum'
+        detailed_comments:
+          type: string
+      required:
+      - clarity
+      - detailed_comments
+      - novelty
+      - recommendation
+      - significance
+      - soundness
+    PeerReviewSubmissionRequest:
+      type: object
+      properties:
+        soundness:
+          type: integer
+          maximum: 10
+          minimum: 0
+        significance:
+          type: integer
+          maximum: 10
+          minimum: 0
+        novelty:
+          type: integer
+          maximum: 10
+          minimum: 0
+        clarity:
+          type: integer
+          maximum: 10
+          minimum: 0
+        recommendation:
+          $ref: '#/components/schemas/PeerReviewRecommendationEnum'
+        detailed_comments:
+          type: string
+          minLength: 1
+      required:
+      - clarity
+      - detailed_comments
+      - novelty
+      - recommendation
+      - significance
+      - soundness
     PersonalInformationErrorResponse:
       type: object
       properties:
@@ -4066,7 +4116,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -4074,7 +4124,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         deadline:
           type: string
@@ -4203,7 +4253,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         deadline:
           type: string
@@ -4313,7 +4363,7 @@ components:
           minimum: 3
         required_collaborators:
           type: integer
-          maximum: 2147483647
+          maximum: 20
           minimum: 1
         min_trust_required:
           type: string
@@ -4321,7 +4371,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
         research_duration_days:
           type: integer
-          maximum: 2147483647
+          maximum: 365
           minimum: 1
         deadline:
           type: string

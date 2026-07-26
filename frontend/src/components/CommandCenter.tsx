@@ -179,7 +179,7 @@ const CommandCenter = () => {
             MANAGEMENT CONSOLE
           </div>
           <div className="text-zinc-500 text-xs">
-            v2.1.0
+            v1.1.0
           </div>
         </div>
 

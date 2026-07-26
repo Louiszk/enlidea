@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from django.utils.timezone import localtime
@@ -193,10 +194,9 @@ class AgentSerializer(serializers.ModelSerializer):
             "is_online",
             "capabilities",
             "capabilities_detail",
-            "api_key_hash",
             "created_at",
         ]
-        read_only_fields = ["api_key_hash", "is_online", "orange_stars", "is_active"]
+        read_only_fields = ["is_online", "orange_stars", "is_active"]
 
     def validate_name(self, value):
         # Strict sanitization for agent names to prevent spoofing/UI breakage
@@ -206,12 +206,19 @@ class AgentSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Agent name cannot be empty.")
 
-        # Profanity check for agent names
+        # Profanity check for agent names with cache & regex word boundaries
+        import re
+        from django.core.cache import cache
         from .models import ProfaneWord
 
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
+        profane_words = cache.get("profane_words")
+        if profane_words is None:
+            profane_words = list(ProfaneWord.objects.values_list("word", flat=True))
+            cache.set("profane_words", profane_words, 3600)
+
+        value_lower = value.lower()
         for word in profane_words:
-            if word.lower() in value.lower():
+            if re.search(r"\b" + re.escape(word.lower()) + r"\b", value_lower):
                 raise serializers.ValidationError(f"The name contains profane language: '{word}'")
         return value
 
@@ -447,6 +454,28 @@ class AgentDirectiveSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "maintainer", "agent_response", "status", "created_at", "updated_at"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            user = request.user
+            if hasattr(user, "agents"):
+                self.fields["agent"].queryset = user.agents.all()
+
+    def validate_agent(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            user = request.user
+            if hasattr(user, "agents"):
+                if value.maintainer_id != user.id:
+                    raise serializers.ValidationError("Selected agent does not belong to you.")
+            elif hasattr(user, "maintainer_id"):
+                if value.maintainer_id != user.maintainer_id:
+                    raise serializers.ValidationError("Agent does not belong to the same maintainer.")
+        return value
+
     def validate_content(self, value):
         # Apply strict normalization (NFKC) for directives
         value = sanitize_agent_input(value, apply_nfkc=True)
@@ -505,6 +534,42 @@ class ProfaneWordSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProfaneWord
         fields = ["id", "word"]
+
+
+class PeerReviewSubmissionSerializer(serializers.ModelSerializer):
+    soundness = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    significance = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    novelty = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    clarity = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    recommendation = serializers.ChoiceField(choices=PeerReview.RECOMMENDATION_CHOICES, required=True)
+    detailed_comments = serializers.CharField(required=True, allow_blank=False)
+
+    class Meta:
+        model = PeerReview
+        fields = [
+            "soundness",
+            "significance",
+            "novelty",
+            "clarity",
+            "recommendation",
+            "detailed_comments",
+        ]
+
+    def validate_detailed_comments(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Detailed comments cannot be empty.")
+        from .sanitization import sanitize_agent_input
+
+        value = sanitize_agent_input(value, apply_nfkc=False)
+        if len(value) > 10000:
+            raise serializers.ValidationError("Detailed comments must be under 10000 characters.")
+        from .models import ProfaneWord
+
+        profane_words = ProfaneWord.objects.values_list("word", flat=True)
+        for word in profane_words:
+            if word.lower() in value.lower():
+                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
+        return value
 
 
 class PeerReviewSerializer(serializers.ModelSerializer):
@@ -589,7 +654,7 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
             "deadline",
             "interview_prompt",
         ]
-        read_only_fields = ["status"]
+        read_only_fields = ["status", "deadline"]
 
     def validate_profanity(self, text):
         from .models import ProfaneWord
@@ -603,7 +668,7 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) <= 10:
             raise serializers.ValidationError("Title must be over 10 characters")
-        if len(value) >= 120:
+        if len(value) > 80:
             raise serializers.ValidationError("Title must be under 80 characters")
         self.validate_profanity(value)
         return value
@@ -619,8 +684,8 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) <= 140:
             raise serializers.ValidationError("Content must be over 140 characters")
-        if len(value) > 10000:
-            raise serializers.ValidationError("Content must be under 10000 characters")
+        if len(value) > 50000:
+            raise serializers.ValidationError("Content must be under 50000 characters")
         self.validate_profanity(value)
         return value
 
@@ -640,13 +705,50 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # Reviewer cap validation
+        required_capabilities = attrs.get("required_capabilities")
+        if required_capabilities is not None and len(required_capabilities) == 0:
+            raise serializers.ValidationError(
+                {"required_capabilities": "At least one required capability must be selected."}
+            )
+
         required_reviews = attrs.get("required_reviews")
-        if required_reviews:
+        if required_reviews is not None:
             if required_reviews < 3:
                 raise serializers.ValidationError({"required_reviews": "Minimum of 3 peer reviews required."})
             if required_reviews > 20:
                 raise serializers.ValidationError({"required_reviews": "Maximum of 20 peer reviews allowed."})
+
+        required_collaborators = attrs.get("required_collaborators")
+        if required_collaborators is not None:
+            if required_collaborators < 1:
+                raise serializers.ValidationError({"required_collaborators": "At least 1 collaborator is required."})
+            if required_collaborators > 20:
+                raise serializers.ValidationError({"required_collaborators": "Maximum of 20 collaborators allowed."})
+
+        research_duration_days = attrs.get("research_duration_days")
+        if research_duration_days is not None:
+            if research_duration_days < 1:
+                raise serializers.ValidationError(
+                    {"research_duration_days": "Research duration must be at least 1 day."}
+                )
+            if research_duration_days > 365:
+                raise serializers.ValidationError(
+                    {"research_duration_days": "Research duration cannot exceed 365 days."}
+                )
+
+        min_trust = attrs.get("min_trust_required")
+        if min_trust is not None:
+            if min_trust < Decimal("-20.0000") or min_trust > Decimal("1000.0000"):
+                raise serializers.ValidationError(
+                    {"min_trust_required": "Min trust required must be between -20.0 and 1000.0."}
+                )
+
+        bounty = attrs.get("bounty_amount")
+        if bounty is not None:
+            if bounty < Decimal("0.0000") or bounty > Decimal("1000000.0000"):
+                raise serializers.ValidationError(
+                    {"bounty_amount": "Bounty amount must be between 0 and 1,000,000 Blue Stars."}
+                )
 
         return attrs
 
@@ -710,7 +812,7 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) <= 10:
             raise serializers.ValidationError("Title must be over 10 characters")
-        if len(value) >= 120:
+        if len(value) > 80:
             raise serializers.ValidationError("Title must be under 80 characters")
         self.validate_profanity(value)
         return value
@@ -726,8 +828,8 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) <= 140:
             raise serializers.ValidationError("Content must be over 140 characters")
-        if len(value) > 10000:
-            raise serializers.ValidationError("Content must be under 10000 characters")
+        if len(value) > 50000:
+            raise serializers.ValidationError("Content must be under 50000 characters")
         self.validate_profanity(value)
         return value
 
@@ -754,8 +856,22 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
 
         # Integer enforcement for trust
         min_trust = attrs.get("min_trust_required")
-        if min_trust is not None and min_trust % 1 != 0:
-            raise serializers.ValidationError({"min_trust_required": "Minimum trust required must be a whole number."})
+        if min_trust is not None:
+            if min_trust % 1 != 0:
+                raise serializers.ValidationError(
+                    {"min_trust_required": "Minimum trust required must be a whole number."}
+                )
+            if min_trust < Decimal("-20.0000") or min_trust > Decimal("1000.0000"):
+                raise serializers.ValidationError(
+                    {"min_trust_required": "Min trust required must be between -20.0 and 1000.0."}
+                )
+
+        required_collaborators = attrs.get("required_collaborators")
+        if required_collaborators is not None:
+            if required_collaborators < 1:
+                raise serializers.ValidationError({"required_collaborators": "At least 1 collaborator is required."})
+            if required_collaborators > 20:
+                raise serializers.ValidationError({"required_collaborators": "Maximum of 20 collaborators allowed."})
 
         # Reviewer cap validation
         required_reviews = attrs.get("required_reviews")
@@ -880,6 +996,15 @@ class AttachmentSerializer(serializers.ModelSerializer):
         model = Attachment
         fields = ["id", "node", "file", "url", "uploaded_by", "uploaded_by_name", "created_at"]
         read_only_fields = ["id", "node", "uploaded_by", "created_at", "file"]
+
+    def validate_file(self, value):
+        from .services import process_and_validate_attachment_image
+
+        try:
+            return process_and_validate_attachment_image(value)
+        except Exception as e:
+            msg = e.messages[0] if hasattr(e, "messages") else str(e)
+            raise serializers.ValidationError(msg)
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_url(self, obj):

@@ -10,7 +10,7 @@ const Home = () => {
   const handleRequestKey = async () => {
     setIsFetchingKey(true);
     try {
-      const response = await apiClient.get('/v1/public-key/');
+      const response = await apiClient.post('/v1/public-key/');
       setPublicKey(response.data.api_key);
     } catch (error) {
       console.error('Failed to fetch public key', error);
@@ -135,7 +135,7 @@ const Home = () => {
                       <div>
                         <p className="text-[9px] font-black text-indigo-500/50 uppercase tracking-[0.2em] mb-1">MCP Server URL</p>
                         <div className="text-xs font-mono text-indigo-400 break-all bg-indigo-500/5 p-2 rounded border border-indigo-500/10">
-                          {`${MCP_BASE_URL}/mcp`}
+                          {MCP_BASE_URL}
                         </div>
                       </div>
                     </div>

@@ -1,4 +1,5 @@
 import io
+import uuid
 import requests
 import logging
 import posixpath
@@ -13,6 +14,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from markdown_it import MarkdownIt
+from PIL import Image
 
 from .models import ResearchNode, Bid, ResearchKeyword
 from accounts.models import Agent
@@ -87,6 +89,106 @@ def download_remote_file(url, max_size_bytes, allowed_extensions=None):
         raise ValidationError("Failed to download file from the remote URL.")
 
 
+MAX_IMAGE_PIXELS = 10_000_000
+ALLOWED_IMAGE_FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp", "GIF": ".gif"}
+ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
+DISALLOWED_EXTENSIONS = {".html", ".htm", ".svg", ".php", ".js", ".exe", ".sh", ".py", ".pl"}
+
+
+def process_and_validate_attachment_image(file_obj, max_size_bytes=2 * 1024 * 1024):
+    """
+    Validates, decodes, sanitizes, and re-encodes uploaded images for attachments.
+    Enforces a 2MB size limit, MIME/extension allowlists, Pillow format verification,
+    decompression bomb prevention, and generates a secure server-side filename.
+    """
+    if not file_obj:
+        raise ValidationError("No file provided.")
+
+    # 1. Enforce size limit
+    file_size = getattr(file_obj, "size", None)
+    if file_size is not None and file_size > max_size_bytes:
+        raise ValidationError(f"File size exceeds the limit of {max_size_bytes / (1024 * 1024):.1f}MB.")
+
+    try:
+        if hasattr(file_obj, "chunks"):
+            file_bytes = b"".join(chunk for chunk in file_obj.chunks(chunk_size=65536))
+        elif hasattr(file_obj, "read"):
+            file_bytes = file_obj.read()
+            if hasattr(file_obj, "seek"):
+                file_obj.seek(0)
+        else:
+            file_bytes = bytes(file_obj)
+    except Exception as e:
+        raise ValidationError(f"Failed to read upload stream: {str(e)}")
+
+    if len(file_bytes) > max_size_bytes:
+        raise ValidationError(f"File size exceeds the limit of {max_size_bytes / (1024 * 1024):.1f}MB.")
+
+    if len(file_bytes) == 0:
+        raise ValidationError("Uploaded file is empty.")
+
+    # 2. Check original filename extension if present
+    original_name = getattr(file_obj, "name", "") or ""
+    original_ext = posixpath.splitext(original_name.lower())[1]
+    if original_ext in DISALLOWED_EXTENSIONS or original_ext == ".svg":
+        raise ValidationError(
+            f"Disallowed file extension: '{original_ext}'. Only PNG, JPEG, WebP, and GIF images are permitted."
+        )
+
+    # 3. Check Content-Type if present
+    content_type = getattr(file_obj, "content_type", None)
+    if content_type:
+        content_type = content_type.lower().split(";")[0].strip()
+        if content_type not in ALLOWED_MIME_TYPES:
+            raise ValidationError(f"Invalid Content-Type: '{content_type}'. Must be a supported image MIME type.")
+
+    # 4. Pillow Decoding & Verification
+    orig_max_pixels = Image.MAX_IMAGE_PIXELS
+    try:
+        Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+        image_stream = io.BytesIO(file_bytes)
+
+        with Image.open(image_stream) as img:
+            fmt = img.format
+            if not fmt or fmt.upper() not in ALLOWED_IMAGE_FORMATS:
+                raise ValidationError(f"Unsupported or invalid image format: '{fmt}'.")
+
+            width, height = img.size
+            if width * height > MAX_IMAGE_PIXELS:
+                raise ValidationError("Image dimensions exceed maximum allowed limits (decompression bomb protection).")
+
+            img.load()
+
+            save_fmt = fmt.upper()
+            if save_fmt == "JPEG":
+                if img.mode in ("RGBA", "P", "LA"):
+                    clean_img = img.convert("RGB")
+                else:
+                    clean_img = img
+            else:
+                clean_img = img
+
+            output_buffer = io.BytesIO()
+            clean_img.save(output_buffer, format=save_fmt)
+            output_bytes = output_buffer.getvalue()
+
+    except Image.DecompressionBombError:
+        raise ValidationError("Decompression bomb detected or image dimensions too large.")
+    except ValidationError:
+        raise
+    except Exception as e:
+        logger.error(f"Image validation/decoding error: {str(e)}")
+        raise ValidationError("Invalid or corrupted image data.")
+    finally:
+        Image.MAX_IMAGE_PIXELS = orig_max_pixels
+
+    # 5. Generate secure server-side filename
+    ext = ALLOWED_IMAGE_FORMATS[fmt.upper()]
+    safe_filename = f"{uuid.uuid4().hex}{ext}"
+
+    return ContentFile(output_bytes, name=safe_filename)
+
+
 def create_research_node(agent, validated_data):
     # Copy to avoid modifying in-place
     data = validated_data.copy()
@@ -109,15 +211,16 @@ def create_research_node(agent, validated_data):
             )
 
         maintainer.balance_blue_stars -= total_cost
-        maintainer.save(update_fields=["balance_blue_stars"])
+        maintainer.save(update_fields=["balance_blue_stars", "updated_at"])
 
         from main_api.tasks import TREASURY_USERNAME
 
         updated_count = User.objects.filter(username=TREASURY_USERNAME).update(
-            balance_blue_stars=F("balance_blue_stars") + creation_fee
+            balance_blue_stars=F("balance_blue_stars") + creation_fee, updated_at=timezone.now()
         )
         if updated_count == 0:
             logger.error("Treasury account not found during node creation!")
+            raise DRFValidationError({"detail": "System Treasury account does not exist. Transaction aborted."})
 
         # Zero-bounty nodes cannot have trust requirements
         min_trust = data.get("min_trust_required", Decimal("0"))
@@ -125,9 +228,8 @@ def create_research_node(agent, validated_data):
             min_trust = Decimal("0.0000")
         data["min_trust_required"] = min_trust
 
-        provided_deadline = data.get("deadline")
-        if not provided_deadline:
-            data["deadline"] = timezone.now() + timedelta(days=7)
+        # Server-controlled initial deadline (7 days for bidding period)
+        data["deadline"] = timezone.now() + timedelta(days=7)
 
         # ManyToMany fields handling
         required_capabilities = data.pop("required_capabilities", [])
@@ -234,7 +336,7 @@ def delete_research_node(node, user):
         if locked_instance.coordinating_agent:
             refund_amount = max(Decimal("0"), locked_instance.bounty_amount - locked_instance.forfeited_bounty)
             User.objects.filter(id=locked_instance.coordinating_agent.maintainer_id).update(
-                balance_blue_stars=F("balance_blue_stars") + refund_amount
+                balance_blue_stars=F("balance_blue_stars") + refund_amount, updated_at=timezone.now()
             )
 
         if locked_instance.assigned_agents.exists():
@@ -248,7 +350,9 @@ def delete_research_node(node, user):
                 )
 
             for m_id, amount in maintainer_refunds.items():
-                User.objects.filter(id=m_id).update(balance_blue_stars=F("balance_blue_stars") + amount)
+                User.objects.filter(id=m_id).update(
+                    balance_blue_stars=F("balance_blue_stars") + amount, updated_at=timezone.now()
+                )
 
         locked_instance.delete()
 
@@ -280,7 +384,7 @@ def submit_bid(agent, node, interview_response):
             if node.assigned_agents.count() >= node.required_collaborators:
                 node.status = "in_progress"
                 node.deadline = timezone.now() + timedelta(days=node.research_duration_days)
-                node.bids.filter(status="pending").update(status="rejected")
+                node.bids.filter(status="pending").update(status="rejected", updated_at=timezone.now())
             node.save()
 
             if node.status == "in_progress" and node.deadline:
@@ -367,7 +471,7 @@ def evaluate_bid_service(user, bid, action_choice):
             if node.assigned_agents.count() >= node.required_collaborators:
                 node.status = "in_progress"
                 node.deadline = timezone.now() + timedelta(days=node.research_duration_days)
-                node.bids.filter(status="pending").update(status="rejected")
+                node.bids.filter(status="pending").update(status="rejected", updated_at=timezone.now())
 
             node.save()
 
@@ -401,10 +505,10 @@ def finalize_research_service(agent, node, content, request_host):
 
         def extract_image_src(tokens_list):
             for token in tokens_list:
-                if token.type == "image":
-                    for attr in token.attrs:
-                        if attr[0] == "src":
-                            urls.append(attr[1])
+                if token.type == "image" and token.attrs:
+                    src = token.attrs.get("src")
+                    if src:
+                        urls.append(src)
                 if token.children:
                     extract_image_src(token.children)
 
@@ -437,7 +541,7 @@ def finalize_research_service(agent, node, content, request_host):
 
         locked_node.body = content
         locked_node.status = "in_review"
-        locked_node.save(update_fields=["body", "status"])
+        locked_node.save(update_fields=["body", "status", "updated"])
 
         from .tasks import task_matchmake_node
 
@@ -501,7 +605,7 @@ def handle_coordinator_decision(user, node, action_choice):
             maintainer.balance_blue_stars -= REVISION_FEE
             maintainer.save()
             User.objects.filter(username=TREASURY_USERNAME).update(
-                balance_blue_stars=F("balance_blue_stars") + REVISION_FEE
+                balance_blue_stars=F("balance_blue_stars") + REVISION_FEE, updated_at=timezone.now()
             )
 
             locked_node.revision_count += 1
@@ -566,7 +670,7 @@ def handle_coordinator_decision(user, node, action_choice):
             maintainer.balance_blue_stars -= ESCALATION_FEE
             maintainer.save()
             User.objects.filter(username=TREASURY_USERNAME).update(
-                balance_blue_stars=F("balance_blue_stars") + ESCALATION_FEE
+                balance_blue_stars=F("balance_blue_stars") + ESCALATION_FEE, updated_at=timezone.now()
             )
 
             locked_node.escalated_to_counsel = True
@@ -578,3 +682,84 @@ def handle_coordinator_decision(user, node, action_choice):
             return {"status": "escalated_to_counsel"}
 
         raise DRFValidationError({"detail": "Invalid action."})
+
+
+def cleanup_agent_active_node_commitments(agent):
+    """
+    Cleans up active research node commitments for an agent being revoked or deleted:
+    1. If the agent is a coordinator of active nodes, aborts those nodes and refunds other maintainers' worker stakes.
+    2. If the agent is a worker on active nodes, disassociates the agent, transfers their stake to Treasury,
+       notifies the coordinator, and reverts node status to 'open' if 0 workers remain.
+    """
+    from main_api.models import ResearchNode
+    from social.models import Notification
+    from main_api.tasks import STAKE_RATE, TREASURY_USERNAME
+    from accounts.models import Account
+
+    # 1. Abort nodes coordinated by this agent and refund other maintainers' worker stakes
+    active_coordinated_nodes = ResearchNode.objects.filter(
+        coordinating_agent=agent,
+        status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
+    )
+
+    for node in active_coordinated_nodes:
+        stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+        for worker in node.assigned_agents.all():
+            if worker.maintainer_id != agent.maintainer_id:
+                Account.objects.filter(id=worker.maintainer_id).update(
+                    balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
+                )
+                Notification.objects.create(
+                    recipient_id=worker.maintainer_id,
+                    notification_type="payout_received",
+                    research_node=None,
+                    verb=f"Research Node '{node.title}' was aborted because coordinating agent '{agent.name}' was revoked/deleted. Stake of {stake_amount} Blue Stars refunded.",
+                )
+        node.status = "failed"
+        node.save(update_fields=["status", "updated"])
+
+    # 2. Handle active nodes coordinated by OTHER maintainers where this agent is a worker
+    worker_active_nodes = (
+        ResearchNode.objects.filter(
+            assigned_agents=agent,
+            status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
+        )
+        .exclude(coordinating_agent=agent)
+        .distinct()
+    )
+
+    for node in worker_active_nodes:
+        stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+
+        # Transfer forfeited worker stake to System Treasury
+        treasury_updated = Account.objects.filter(username=TREASURY_USERNAME).update(
+            balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
+        )
+        if treasury_updated == 0:
+            raise Exception("System Treasury account missing during worker stake settlement.")
+
+        # Disassociate the worker agent
+        node.assigned_agents.remove(agent)
+
+        # Notify the node coordinator
+        if node.coordinating_agent and node.coordinating_agent.maintainer:
+            Notification.objects.create(
+                recipient=node.coordinating_agent.maintainer,
+                notification_type="custom",
+                research_node=node,
+                verb=f"Worker agent '{agent.name}' was removed from Research Node '{node.title}' due to agent revocation/deletion.",
+            )
+
+        # Check remaining workers on the node
+        remaining_workers = node.assigned_agents.count()
+        if remaining_workers == 0:
+            if node.status in ["in_progress", "in_review", "awaiting_coordinator"]:
+                node.status = "open"
+                node.save(update_fields=["status", "updated"])
+                if node.coordinating_agent and node.coordinating_agent.maintainer:
+                    Notification.objects.create(
+                        recipient=node.coordinating_agent.maintainer,
+                        notification_type="custom",
+                        research_node=node,
+                        verb=f"Research Node '{node.title}' has no remaining assigned worker agents and has been reverted to 'open' status for new bidding.",
+                    )

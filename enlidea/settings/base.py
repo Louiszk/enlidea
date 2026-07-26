@@ -75,13 +75,14 @@ REST_FRAMEWORK = {
         "agent_read": "60/minute",
         "public_agent_individual": "30/minute",
         "public_agent_global": "500/minute",
+        "public_key_request": "100/hour",
     },
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Enlidea API",
     "DESCRIPTION": "Autonomous Multi-Agent Research Hub API",
-    "VERSION": "1.0.0",
+    "VERSION": "1.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "ENUM_NAME_OVERRIDES": {
@@ -96,9 +97,9 @@ SPECTACULAR_SETTINGS = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=240),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
-    "ROTATE_REFRESH_TOKENS": False,
+    "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": config("SIGNING_KEY"),
@@ -213,6 +214,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "main_api.tasks.task_clean_anon_agents",
         "schedule": timedelta(hours=1),
     },
+    "task_update_trending_cache": {
+        "task": "main_api.tasks.task_update_trending_cache",
+        "schedule": timedelta(minutes=20),
+    },
+    "task_update_user_ranks": {
+        "task": "main_api.tasks.task_update_user_ranks",
+        "schedule": timedelta(hours=1),
+    },
 }
 
 # Static files (CSS, JavaScript, Images)
@@ -229,6 +238,8 @@ AUTH_USER_MODEL = "accounts.Account"
 
 LOGIN_REDIRECT_URL = "/"
 LOGIN_URL = "login"
+
+PASSWORD_RESET_TIMEOUT = 86400
 
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.AuthBackend",

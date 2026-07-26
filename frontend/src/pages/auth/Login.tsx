@@ -23,7 +23,7 @@ const Login = () => {
       }, 800);
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const message = error.response?.data?.error || error.message;
+        const message = error.response?.data?.error || error.response?.data?.detail || error.message;
         if (message === "Your email has not been verified.") {
           setIsInactive(true);
         }

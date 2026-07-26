@@ -4,10 +4,13 @@ from django.core.validators import MaxLengthValidator
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 from django.core.exceptions import ValidationError
 import re
 from django.db.models.functions import Coalesce
-from django.db.models import Func, Count, Avg
+from django.db.models import Func, Count, Avg, Sum
+from django.db.models.signals import post_save, post_delete, m2m_changed
+from django.dispatch import receiver
 
 
 class ArrayLength(Func):
@@ -56,10 +59,12 @@ class Account(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=30, unique=True, validators=[validate_username])
     date_joined = models.DateTimeField(verbose_name="date joined", auto_now_add=True)
     last_login = models.DateTimeField(verbose_name="last login", auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
     is_admin = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
+    jwt_token_version = models.IntegerField(default=0)
 
     saved_nodes = ArrayField(models.IntegerField(), default=list, blank=True)
     saved_papers = ArrayField(models.IntegerField(), default=list, blank=True)
@@ -75,6 +80,12 @@ class Account(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = ["username"]
 
     objects = AccountManager()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(Func("username", function="LOWER"), name="unique_lower_username"),
+            models.UniqueConstraint(Func("email", function="LOWER"), name="unique_lower_email"),
+        ]
 
     def __str__(self):
         return self.email
@@ -166,9 +177,6 @@ class Account(AbstractBaseUser, PermissionsMixin):
         return self.followers.count()
 
 
-from django.utils import timezone
-
-
 class Agent(models.Model):
     name = models.CharField(max_length=100, unique=True)
     api_key_hash = models.CharField(max_length=255, unique=True)
@@ -187,3 +195,49 @@ class Agent(models.Model):
 
     def __str__(self):
         return f"{self.name} (Maintainer: {self.maintainer.username})"
+
+
+@receiver([post_save, post_delete], sender=Agent)
+def sync_maintainer_orange_stars_on_agent_change(sender, instance, **kwargs):
+    if instance.maintainer_id:
+        try:
+            maintainer = instance.maintainer
+        except Account.DoesNotExist:
+            return
+
+        if maintainer.username in ["Public_Pool", "System_Treasury"]:
+            return
+
+        agent_os_sum = maintainer.agents.filter(is_active=True).aggregate(total=Sum("orange_stars"))[
+            "total"
+        ] or Decimal("0.0000")
+        new_score = round(float(agent_os_sum + (maintainer.balance_blue_stars / Decimal("10"))))
+
+        if maintainer.balance_orange_stars != agent_os_sum or maintainer.score != new_score:
+            Account.objects.filter(id=maintainer.id).update(
+                balance_orange_stars=agent_os_sum,
+                score=new_score,
+            )
+
+
+@receiver(m2m_changed, sender=Agent.capabilities.through)
+def update_agent_timestamp_on_capability_change(sender, instance, action, reverse, pk_set, **kwargs):
+    now = timezone.now()
+
+    if action == "pre_clear":
+        if reverse:
+            # instance is Capability
+            Agent.objects.filter(capabilities=instance).update(updated_at=now)
+        else:
+            # instance is Agent
+            Agent.objects.filter(pk=instance.pk).update(updated_at=now)
+        return
+
+    if action not in {"post_add", "post_remove"}:
+        return
+
+    if not reverse:
+        Agent.objects.filter(pk=instance.pk).update(updated_at=now)
+    else:
+        if pk_set:
+            Agent.objects.filter(pk__in=pk_set).update(updated_at=now)

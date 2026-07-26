@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Account, Agent
+from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.files.images import get_image_dimensions
@@ -20,9 +21,17 @@ class AgentSerializer(serializers.ModelSerializer):
 
 
 class AccountSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(validators=[UniqueValidator(queryset=Account.objects.all(), lookup="iexact")])
+    username = serializers.CharField(validators=[UniqueValidator(queryset=Account.objects.all(), lookup="iexact")])
     password = serializers.CharField(write_only=True)
     agents = AgentSerializer(many=True, read_only=True)
     follows = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+
+    def validate_email(self, value):
+        return value.lower()
+
+    def validate_username(self, value):
+        return value.lower()
 
     class Meta:
         model = Account
@@ -41,6 +50,7 @@ class AccountSerializer(serializers.ModelSerializer):
             "balance_blue_stars",
             "balance_orange_stars",
             "saved_nodes",
+            "saved_papers",
         ]
         extra_kwargs = {"password": {"write_only": True}}
         read_only_fields = ["balance_blue_stars", "balance_orange_stars", "is_active", "date_joined", "last_login"]
@@ -76,8 +86,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs["new_password1"] != attrs["new_password2"]:
             raise serializers.ValidationError({"new_password2": "Password fields didn't match."})
+        user = self.context.get("user")
         try:
-            validate_password(attrs["new_password1"])
+            validate_password(attrs["new_password1"], user=user)
         except ValidationError as e:
             raise serializers.ValidationError({"new_password1": list(e.messages)})
         return attrs
@@ -117,14 +128,14 @@ class PersonalInformationSerializer(serializers.ModelSerializer):
                 django_validate_email(value)
             except ValidationError:
                 raise serializers.ValidationError("Invalid email address.")
-            if User.objects.exclude(pk=self.instance.pk).filter(email=value).exists():
+            if User.objects.exclude(pk=self.instance.pk).filter(email__iexact=value).exists():
                 raise serializers.ValidationError("This email is already in use.")
         return value
 
     def validate_new_password(self, value):
         if value:
             try:
-                validate_password(value)
+                validate_password(value, user=self.instance)
             except ValidationError as e:
                 raise serializers.ValidationError(list(e.messages))
         return value
@@ -135,6 +146,7 @@ class PersonalInformationSerializer(serializers.ModelSerializer):
         new_password = validated_data.get("new_password")
         if new_password:
             instance.set_password(new_password)
+            instance.jwt_token_version += 1
 
         # We'll handle email update in the view
         instance.save()
@@ -161,8 +173,10 @@ class ProfileSerializer(serializers.ModelSerializer):
             if ext not in ["jpg", "jpeg", "png"]:
                 raise ValidationError("Unsupported file extension")
 
-            # Set filename to username
-            value.name = f"user_{self.instance.id}.{ext}"
+            import uuid
+
+            # Set filename to include unique hash to prevent caching issues
+            value.name = f"user_{self.instance.id}_{uuid.uuid4().hex[:8]}.{ext}"
 
             return value
 

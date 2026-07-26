@@ -23,8 +23,12 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ error, errorInfo });
-    // Log the error to an error reporting service
-    console.error("Uncaught error:", error, errorInfo);
+    console.error("[Enlidea UI ErrorBoundary]", {
+      timestamp: new Date().toISOString(),
+      error: error?.message || error,
+      stack: error?.stack,
+      componentStack: errorInfo?.componentStack,
+    });
   }
 
   resetErrorBoundary = () => {

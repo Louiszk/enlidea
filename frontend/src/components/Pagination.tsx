@@ -17,6 +17,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange, loading }: { curren
 
   const pageNumbers = getPageNumbers();
 
+  if (totalPages <= 0) return null;
+
   return (
     <div className="flex flex-row justify-center select-none text-white font-semibold items-center mt-6">
       {loading ? (

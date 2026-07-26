@@ -105,3 +105,80 @@ class NodeEditingTests(EnlideaBaseTestCase):
             "Cannot edit a node that has pending bids. Reject or accept pending bids first to avoid bait-and-switch exploits.",
             cast(Any, response.data)["detail"],
         )
+
+    def test_create_node_ignores_custom_deadline(self):
+        """Initial deadline must be server-controlled (7 days) and ignore client deadline."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from main_api.models import ResearchNode
+
+        past_deadline = (timezone.now() - timedelta(days=10)).isoformat()
+        payload = {
+            "title": "Quantum Computing Validation",
+            "description": "Validation of quantum computing algorithms for security.",
+            "body": "Detailed body of the research hypothesis. This needs to be long enough to pass body validation requirements exceeding 140 characters in total length.",
+            "required_capabilities": [self.cap_python.id],
+            "type": self.node_type.pk,
+            "bounty_amount": "50.0000",
+            "deadline": past_deadline,
+        }
+        res = self.client.post(
+            reverse("researchnode-list"),
+            payload,
+            format="json",
+            HTTP_X_AGENT_API_KEY=self.agent1_raw_key,
+        )
+        if res.status_code != status.HTTP_201_CREATED:
+            self.assertEqual(res.status_code, status.HTTP_201_CREATED, msg=f"Error response: {res.data}")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        node_data = cast(dict[str, Any], res.data)
+        node_id = node_data["id"]
+        created_node = ResearchNode.objects.get(id=node_id)
+        # Verify deadline is set in future (~7 days from now), not past
+        self.assertIsNotNone(created_node.deadline)
+        if created_node.deadline is not None:
+            self.assertTrue(created_node.deadline > timezone.now())
+
+    def test_lifecycle_input_bounds_validation(self):
+        """Out of bound research_duration_days and required_collaborators should fail validation."""
+        base_payload = {
+            "title": "Quantum Computing Validation",
+            "description": "Validation of quantum computing algorithms for security.",
+            "body": "Detailed body of the research hypothesis. This needs to be long enough to pass body validation requirements exceeding 140 characters in total length.",
+            "required_capabilities": [self.cap_python.id],
+            "type": self.node_type.pk,
+            "bounty_amount": "50.0000",
+        }
+
+        # Overflow / extreme research_duration_days
+        payload_duration = {**base_payload, "research_duration_days": 99999}
+        res = self.client.post(
+            reverse("researchnode-list"),
+            payload_duration,
+            format="json",
+            HTTP_X_AGENT_API_KEY=self.agent1_raw_key,
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Negative / zero collaborators
+        payload_collab = {**base_payload, "required_collaborators": 0}
+        res = self.client.post(
+            reverse("researchnode-list"),
+            payload_collab,
+            format="json",
+            HTTP_X_AGENT_API_KEY=self.agent1_raw_key,
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_extend_deadline_bounds(self):
+        """Extending deadline with extreme values should fail."""
+        extend_url = reverse("researchnode-extend-deadline", kwargs={"pk": self.node.pk})
+
+        # Out of bounds extension
+        res = self.client.post(
+            extend_url,
+            {"days": 999999999999999},
+            format="json",
+            HTTP_X_AGENT_API_KEY=self.agent1_raw_key,
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)

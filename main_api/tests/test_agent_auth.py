@@ -105,3 +105,20 @@ class AgentAuthTests(EnlideaBaseTestCase):
         response = self.client.post(url, HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn("Missing required capabilities", cast(Any, response.data)["detail"])
+
+    def test_invalid_api_key(self):
+        node = self.create_node(self.agent1)
+        url = reverse("researchnode-bid", kwargs={"pk": node.pk})
+
+        response = self.client.post(url, {"interview_response": "hello"}, HTTP_X_AGENT_API_KEY="invalid-key-xyz")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_inactive_agent_auth(self):
+        self.agent2.is_active = False
+        self.agent2.save()
+
+        node = self.create_node(self.agent1)
+        url = reverse("researchnode-bid", kwargs={"pk": node.pk})
+
+        response = self.client.post(url, {"interview_response": "hello"}, HTTP_X_AGENT_API_KEY=self.agent2_raw_key)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -13,6 +13,7 @@ from .models import (
     ResearchNode,
     PeerReview,
     TrendingCache,
+    Trend,
     NodeType,
     ResearchKeyword,
     Paper,
@@ -51,6 +52,7 @@ from .serializer import (
     CapabilitySearchSerializer,
 )
 from .authentication import AgentApiKeyAuthentication
+from .throttling import PublicKeyRateThrottle
 from .permissions import IsAgent, IsMaintainer, IsNotPublicAgent
 from .services import (
     download_remote_file,
@@ -261,12 +263,12 @@ class AgentViewSet(viewsets.ModelViewSet):
         }
     )
     def create(self, request, *args, **kwargs):
-        if Agent.objects.filter(maintainer=self.request.user).count() >= 4:
-            raise ValidationError({"detail": "Agent limit reached. You can only deploy a maximum of 4 agents."})
-
         # Move the check inside the atomic block with a lock
         with transaction.atomic():
             maintainer = User.objects.select_for_update().get(id=self.request.user.id)
+
+            if Agent.objects.filter(maintainer=maintainer).count() >= 4:
+                raise ValidationError({"detail": "Agent limit reached. You can only deploy a maximum of 4 agents."})
 
             if maintainer.balance_blue_stars < Decimal("50.0000"):
                 raise ValidationError({"detail": "Insufficient Blue Stars. Deploying an agent costs 50 Blue Stars."})
@@ -290,6 +292,7 @@ class AgentViewSet(viewsets.ModelViewSet):
             )
             if updated_count == 0:
                 logger.error("Treasury account not found during agent deployment!")
+                raise ValidationError({"detail": "System Treasury account does not exist. Transaction aborted."})
             agent = serializer.save(maintainer=maintainer, api_key_hash=hashed_key)
 
         # Return the original agent data plus the raw API key
@@ -317,6 +320,13 @@ class AgentViewSet(viewsets.ModelViewSet):
         agent.save()
         return Response({"api_key": raw_key})
 
+    def perform_destroy(self, instance):
+        from .services import cleanup_agent_active_node_commitments
+
+        with transaction.atomic():
+            cleanup_agent_active_node_commitments(instance)
+            instance.delete()
+
     @extend_schema(
         request=None,
         responses={
@@ -330,9 +340,13 @@ class AgentViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
-        agent = self.get_object()
-        agent.is_active = False
-        agent.save()
+        from .services import cleanup_agent_active_node_commitments
+
+        with transaction.atomic():
+            agent = self.get_object()
+            cleanup_agent_active_node_commitments(agent)
+            agent.is_active = False
+            agent.save()
         return Response({"status": "revoked"})
 
     @extend_schema(
@@ -401,7 +415,8 @@ class AgentViewSet(viewsets.ModelViewSet):
 
         # Only broadcast null-agent directives from the agent's own maintainer
         directives_qs = AgentDirective.objects.filter(
-            Q(agent=agent) | Q(agent__isnull=True, maintainer=agent.maintainer), status="pending"
+            Q(agent=agent, maintainer=agent.maintainer) | Q(agent__isnull=True, maintainer=agent.maintainer),
+            status="pending",
         )
 
         nodes_qs = (
@@ -425,26 +440,45 @@ class AgentViewSet(viewsets.ModelViewSet):
             "node", "agent"
         )
 
-        # Calculate latest update timestamp
+        # Calculate latest update timestamp across all relevant agent scope (unfiltered by status)
         timestamps = []
 
-        max_directive = directives_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
+        # 1. Agent metadata / capabilities / orange stars & Maintainer balance
+        if agent.updated_at:
+            timestamps.append(agent.updated_at.timestamp())
+        if agent.maintainer and agent.maintainer.updated_at:
+            timestamps.append(agent.maintainer.updated_at.timestamp())
+
+        # 2. All directives belonging to agent/maintainer (unfiltered by pending status)
+        all_directives_qs = AgentDirective.objects.filter(
+            Q(agent=agent, maintainer=agent.maintainer) | Q(agent__isnull=True, maintainer=agent.maintainer)
+        )
+        max_directive = all_directives_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
         if max_directive:
             timestamps.append(max_directive.timestamp())
 
-        max_node = nodes_qs.aggregate(max_ts=models.Max("updated"))["max_ts"]
+        # 3. All nodes where agent is assigned, coordinator, or reviewer
+        all_nodes_qs = ResearchNode.objects.filter(
+            Q(assigned_agents=agent) | Q(coordinating_agent=agent) | Q(reviews__assigned_reviewer=agent)
+        ).distinct()
+        max_node = all_nodes_qs.aggregate(max_ts=models.Max("updated"))["max_ts"]
         if max_node:
             timestamps.append(max_node.timestamp())
 
-        max_review = reviews_qs.aggregate(max_ts=models.Max("created"))["max_ts"]
+        # 4. All peer reviews assigned to agent (using updated_at, unfiltered by status)
+        all_reviews_qs = PeerReview.objects.filter(assigned_reviewer=agent)
+        max_review = all_reviews_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
         if max_review:
             timestamps.append(max_review.timestamp())
 
-        max_bid = bids_to_evaluate_qs.aggregate(max_ts=models.Max("created_at"))["max_ts"]
+        # 5. All bids submitted by agent OR on nodes coordinated by agent
+        all_bids_qs = Bid.objects.filter(Q(node__coordinating_agent=agent) | Q(agent=agent))
+        max_bid = all_bids_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
         if max_bid:
             timestamps.append(max_bid.timestamp())
 
-        max_message = AgentMessage.objects.filter(node__in=nodes_qs).aggregate(max_ts=models.Max("created_at"))[
+        # 6. Messages on nodes associated with agent
+        max_message = AgentMessage.objects.filter(node__in=all_nodes_qs).aggregate(max_ts=models.Max("created_at"))[
             "max_ts"
         ]
         if max_message:
@@ -507,6 +541,16 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         else:
             self.throttle_scope = "agent_read"
         return super().get_throttles()
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            trend, _ = Trend.objects.get_or_create(research_node=instance)
+            trend.update_metrics(visits=1)
+        except Exception:
+            pass
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def get_queryset(self):
         queryset = ResearchNode.objects.all()
@@ -572,7 +616,12 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.order_by("-created")
 
-        return queryset.with_aggregates().distinct()
+        return (
+            queryset.with_aggregates()
+            .select_related("coordinating_agent", "type")
+            .prefetch_related("required_capabilities", "keywords")
+            .distinct()
+        )
 
     @extend_schema(responses=ResearchNodeListResponseSerializer)
     def list(self, request, *args, **kwargs):
@@ -1020,9 +1069,17 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({"detail": "No file or file_url provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # models.ImageField handles the actual content verification via Pillow
+        # Validate, decode with Pillow, re-encode, and generate a safe filename for both direct and remote uploads
+        from .services import process_and_validate_attachment_image
+
         try:
-            attachment = Attachment.objects.create(node=node, file=file_obj, uploaded_by=agent)
+            validated_file = process_and_validate_attachment_image(file_obj, max_size_bytes=2 * 1024 * 1024)
+            attachment = Attachment.objects.create(node=node, file=validated_file, uploaded_by=agent)
+        except ValidationError as e:
+            return Response(
+                {"detail": e.messages[0] if hasattr(e, "messages") else str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as e:
             logger.error(f"Image upload failed: {str(e)}")
             return Response(
@@ -1151,11 +1208,11 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
         try:
             days = int(request.data.get("days", 0))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             return Response({"detail": "Invalid days format."}, status=status.HTTP_400_BAD_REQUEST)
 
         if days <= 0:
-            return Response({"detail": "Days must be greater than 0."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Days must be a positive integer."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             try:
@@ -1195,11 +1252,13 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
             # Transfer funds
             maintainer.balance_blue_stars -= cost
-            maintainer.save(update_fields=["balance_blue_stars"])
+            maintainer.save(update_fields=["balance_blue_stars", "updated_at"])
 
             from main_api.tasks import TREASURY_USERNAME
 
-            User.objects.filter(username=TREASURY_USERNAME).update(balance_blue_stars=F("balance_blue_stars") + cost)
+            User.objects.filter(username=TREASURY_USERNAME).update(
+                balance_blue_stars=F("balance_blue_stars") + cost, updated_at=timezone.now()
+            )
 
             # Extend deadline
             node.extended_days += days
@@ -1207,7 +1266,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 node.deadline = node.deadline + timedelta(days=days)
             else:
                 node.deadline = timezone.now() + timedelta(days=days)
-            node.save(update_fields=["extended_days", "deadline"])
+            node.save(update_fields=["extended_days", "deadline", "updated"])
 
             from .tasks import task_handle_node_deadline
 
@@ -1236,8 +1295,20 @@ class PeerReviewViewSet(
     viewsets.GenericViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin
 ):
     queryset = PeerReview.objects.all()
-    serializer_class = PeerReviewSerializer
     authentication_classes = [AgentApiKeyAuthentication, CookieJWTAuthentication, authentication.SessionAuthentication]
+
+    def get_serializer_class(self):
+        if self.action in ["update", "partial_update"]:
+            from .serializer import PeerReviewSubmissionSerializer
+
+            return PeerReviewSubmissionSerializer
+        return PeerReviewSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        if self.action in ["update", "partial_update"]:
+            kwargs["partial"] = False
+        return super().get_serializer(*args, **kwargs)
+
     permission_classes = [permissions.IsAuthenticated, IsNotPublicAgent]
 
     def get_throttles(self):
@@ -1303,7 +1374,7 @@ class PeerReviewViewSet(
 
             if action_choice == "reject":
                 review.status = "rejected"
-                review.save(update_fields=["status"])
+                review.save(update_fields=["status", "updated_at"])
 
                 # Unconditionally trigger refill to maintain over-provisioned buffer
                 if node.escalated_to_counsel:
@@ -1323,7 +1394,7 @@ class PeerReviewViewSet(
                 if claimed_or_completed_count >= required:
                     # Too late, quota filled by other agents
                     review.status = "rejected"
-                    review.save(update_fields=["status"])
+                    review.save(update_fields=["status", "updated_at"])
                     return Response(
                         {"detail": "Review quota already filled by other agents."}, status=status.HTTP_409_CONFLICT
                     )
@@ -1331,7 +1402,7 @@ class PeerReviewViewSet(
                 # Successful claim
                 review.status = "claimed"
                 review.claimed_at = timezone.now()
-                review.save(update_fields=["status", "claimed_at"])
+                review.save(update_fields=["status", "claimed_at", "updated_at"])
 
                 # Cleanup: If quota is now met by claims/completions, delete all other 'pending' for this round
                 new_count = claimed_or_completed_count + 1
@@ -1373,23 +1444,22 @@ class PeerReviewViewSet(
             # 3. Replace the serializer's instance with the locked one to prevent overwriting
             serializer.instance = locked_instance
 
-            soundness = data.get("soundness", locked_instance.soundness)
-            significance = data.get("significance", locked_instance.significance)
-            novelty = data.get("novelty", locked_instance.novelty)
-            clarity = data.get("clarity", locked_instance.clarity)
-            recommendation = data.get("recommendation", locked_instance.recommendation)
+            soundness = data["soundness"]
+            significance = data["significance"]
+            novelty = data["novelty"]
+            clarity = data["clarity"]
+            recommendation = data["recommendation"]
+            detailed_comments = data["detailed_comments"]
 
-            # If structured_data is missing in the payload, but the agent is submitting a review, we inject a placeholder to satisfy the orchestrator's check.
-            structured_data = data.get("structured_data", locked_instance.structured_data)
-            if not structured_data:
-                structured_data = {
-                    "soundness": soundness,
-                    "significance": significance,
-                    "novelty": novelty,
-                    "clarity": clarity,
-                    "recommendation": recommendation,
-                    "auto_generated": True,
-                }
+            # We unconditionally generate structured_data from the strict submission.
+            structured_data = {
+                "soundness": soundness,
+                "significance": significance,
+                "novelty": novelty,
+                "clarity": clarity,
+                "recommendation": recommendation,
+                "auto_generated": True,
+            }
 
             # Calculate the true float value (average of the 4 criteria)
             true_value = (soundness + significance + novelty + clarity) / 4.0
@@ -1398,7 +1468,11 @@ class PeerReviewViewSet(
             true_is_approved = recommendation in ["ACCEPT", "MINOR_REVISION"]
 
             serializer.save(
-                value=true_value, is_approved=true_is_approved, structured_data=structured_data, status="completed"
+                value=true_value,
+                is_approved=true_is_approved,
+                structured_data=structured_data,
+                status="completed",
+                detailed_comments=detailed_comments,
             )
 
             # Fire unconditionally. The task itself will check if required_reviews is met while holding a secure DB lock.
@@ -1473,6 +1547,9 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
         return AgentDirective.objects.filter(maintainer=self.request.user)
 
     def perform_create(self, serializer):
+        agent = serializer.validated_data.get("agent")
+        if agent and agent.maintainer != self.request.user:
+            raise PermissionDenied("You cannot issue directives to agents owned by another maintainer.")
         serializer.save(maintainer=self.request.user)
 
     @extend_schema(
@@ -1512,7 +1589,8 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
         if request.method == "GET":
             # Broad commands (agent=None) scoped to maintainer, or specific to this agent
             directives = AgentDirective.objects.filter(
-                Q(agent=agent) | Q(agent__isnull=True, maintainer=agent.maintainer), status="pending"
+                Q(agent=agent, maintainer=agent.maintainer) | Q(agent__isnull=True, maintainer=agent.maintainer),
+                status="pending",
             ).order_by("created_at")
             serializer = self.get_serializer(directives, many=True)
             return Response(serializer.data)
@@ -1524,7 +1602,10 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
 
             with transaction.atomic():
                 try:
-                    directive = AgentDirective.objects.select_for_update().get(id=directive_id)
+                    directive = AgentDirective.objects.select_for_update().get(
+                        id=directive_id,
+                        maintainer=agent.maintainer,
+                    )
                 except AgentDirective.DoesNotExist:
                     return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1594,10 +1675,10 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
         ),
     }
 )
-@api_view(["GET"])
+@api_view(["POST"])
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
-@throttle_classes([throttling.AnonRateThrottle])
+@throttle_classes([PublicKeyRateThrottle])
 def request_public_key(request):
     # Ensure system Account exists
     pool_account, _ = User.objects.get_or_create(
@@ -1634,9 +1715,19 @@ def request_public_key(request):
 @permission_classes([permissions.AllowAny])
 def get_trending(request):
     cache = TrendingCache.objects.first()
-    if not cache:
-        return Response({"error": "Trending data not available"}, status=404)
-    return Response(cache.trending_data)
+    if not cache or not cache.data:
+        from .management.commands.helpers.trending_service import update_trending_cache
+
+        update_trending_cache()
+        cache = TrendingCache.objects.first()
+
+    if not cache or not cache.data:
+        return Response({"trendingCombinations": {}, "trendingCategories": {}})
+
+    try:
+        return Response(cache.trending_data)
+    except Exception:
+        return Response({"trendingCombinations": {}, "trendingCategories": {}})
 
 
 @extend_schema(responses=HighImpactCategorySerializer(many=True))

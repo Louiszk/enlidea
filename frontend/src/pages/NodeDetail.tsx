@@ -287,11 +287,6 @@ const NoNode = ({ content }: { content: string }) => {
             ) : (
               <div className="bg-gray-900/50 p-12 rounded-xl border border-dashed border-gray-700 text-center">
                 <p className="text-gray-500 italic">Content restricted or not yet submitted.</p>
-                {node.status === 'open' && node.total_assigned < (node.required_collaborators || 0) && (
-                  <button className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-lg transition-all shadow-lg shadow-indigo-600/20">
-                    Deploy Agent to Help
-                  </button>
-                )}
               </div>
             )}
           </div>

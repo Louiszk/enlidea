@@ -18,7 +18,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.exceptions import ValidationError
 from .serializers import AccountSerializer, EmailSerializer, PasswordResetConfirmSerializer, PasswordSerializer
 from .models import validate_username
-from .authentication import CookieJWTAuthentication
+from .authentication import CookieJWTAuthentication, enforce_csrf
 from .throttling import UsernameCheckThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -47,7 +47,7 @@ def send_activation_email(request, account):
     token = default_token_generator.make_token(account)
     activation_link = f"{settings.FRONTEND_URL}/activate/{uidb64}/{token}"
 
-    cast(Any, send_async_activation_email).delay(account.id, activation_link)
+    transaction.on_commit(lambda: cast(Any, send_async_activation_email).delay(account.id, activation_link))
     return True
 
 
@@ -57,7 +57,7 @@ def send_password_reset_email(request, account):
     token = default_token_generator.make_token(account)
     reset_link = f"{settings.FRONTEND_URL}/password-reset-confirm/{uidb64}/{token}"
 
-    cast(Any, send_async_password_reset_email).delay(account.id, reset_link)
+    transaction.on_commit(lambda: cast(Any, send_async_password_reset_email).delay(account.id, reset_link))
     return True
 
 
@@ -104,12 +104,14 @@ def set_password_reset_email_sent(user_id):
     },
 )
 @api_view(["GET"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([UsernameCheckThrottle])
 def check_username(request):
     username = request.query_params.get("username")
     if not username:
         return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
+    username = username.lower()
 
     # 1. Check Format/Regex
     try:
@@ -148,6 +150,7 @@ def check_username(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def register(request):
     password_serializer = PasswordSerializer(data=request.data)
@@ -163,15 +166,13 @@ def register(request):
 
     serializer = AccountSerializer(data=account_data)
     if serializer.is_valid():
-        user = serializer.save(is_active=False)
-        if send_activation_email(request, user):
-            return Response(
-                {"message": "User registered successfully. Please check your email for the activation link."},
-                status=status.HTTP_201_CREATED,
-            )
-        else:
-            user.delete()
-            return Response({"error": "Failed to send activation email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        with transaction.atomic():
+            user = serializer.save(is_active=False)
+            send_activation_email(request, user)
+        return Response(
+            {"message": "User registered successfully. Please check your email for the activation link."},
+            status=status.HTTP_201_CREATED,
+        )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -191,7 +192,7 @@ def register(request):
         ),
     }
 )
-@api_view(["GET"])
+@api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def activate_account(request, uidb64, token):
@@ -219,14 +220,14 @@ def activate_account(request, uidb64, token):
 
                     if treasury_acc.balance_blue_stars >= signup_bonus:
                         treasury_acc.balance_blue_stars -= signup_bonus
-                        treasury_acc.save(update_fields=["balance_blue_stars"])
+                        treasury_acc.save(update_fields=["balance_blue_stars", "updated_at"])
                         user.balance_blue_stars = signup_bonus
                     else:
                         user.balance_blue_stars = Decimal("0.0000")
                 except get_user_model().DoesNotExist:
                     user.balance_blue_stars = Decimal("0.0000")
 
-                user.save(update_fields=["is_active", "balance_blue_stars"])
+                user.save(update_fields=["is_active", "balance_blue_stars", "updated_at"])
             return Response({"message": "Account activated successfully."}, status=status.HTTP_200_OK)
         else:
             return Response(
@@ -274,29 +275,35 @@ def activate_account(request, uidb64, token):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def login_view(request):
-    if not check_login_attempts(request):
+    email = request.data.get("email") if isinstance(request.data, dict) else None
+    if not check_login_attempts(request, identifier=email):
         return Response(
-            {"error": "Too many failed login attempts. Please try again 12 hours."},
+            {"error": "Too many failed login attempts. Please try again in 12 hours."},
             status=status.HTTP_429_TOO_MANY_REQUESTS,
         )
 
-    email = request.data.get("email")
-    password = request.data.get("password")
+    password = request.data.get("password") if isinstance(request.data, dict) else None
     user = authenticate(username=email, password=password)
 
     if user:
         if user.is_active:
-            reset_login_attempts(request)
+            reset_login_attempts(request, identifier=email)
             refresh = RefreshToken.for_user(user)
+            token_version = getattr(user, "jwt_token_version", 0)
+            refresh["jwt_token_version"] = token_version
+
+            access_token = refresh.access_token
+            access_token["jwt_token_version"] = token_version
 
             response = Response(
                 {"message": "Login successful.", "user": AccountSerializer(user).data}, status=status.HTTP_200_OK
             )
 
             response.set_cookie(
-                "access", str(refresh.access_token), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/"
+                "access", str(access_token), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/"
             )
             response.set_cookie(
                 "refresh", str(refresh), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/"
@@ -305,8 +312,8 @@ def login_view(request):
         else:
             return Response({"error": "Your email has not been verified."}, status=status.HTTP_403_FORBIDDEN)
     else:
-        increment_login_attempts(request)
-        remaining_attempts = get_remaining_attempts(request)
+        increment_login_attempts(request, identifier=email)
+        remaining_attempts = get_remaining_attempts(request, identifier=email)
         if remaining_attempts > 0:
             if remaining_attempts > 3:
                 return Response({"error": "Invalid login."}, status=status.HTTP_400_BAD_REQUEST)
@@ -348,6 +355,7 @@ def login_view(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def resend_activation(request):
     serializer = EmailSerializer(data=request.data)
@@ -359,20 +367,12 @@ def resend_activation(request):
             if can_send_verification_email(user.id):
                 if send_activation_email(request, user):
                     set_verification_email_sent(user.id)
-                    return Response({"message": "Activation email sent successfully."}, status=status.HTTP_200_OK)
-                else:
-                    return Response(
-                        {"error": "Failed to send activation email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-            else:
-                return Response(
-                    {"error": "Please wait at least 10 minutes before requesting another activation email."},
-                    status=status.HTTP_429_TOO_MANY_REQUESTS,
-                )
         except User.DoesNotExist:
-            return Response(
-                {"error": "No inactive account found with this email address."}, status=status.HTTP_404_NOT_FOUND
-            )
+            pass
+        return Response(
+            {"message": "If an inactive account with that email address exists, an activation email has been sent."},
+            status=status.HTTP_200_OK,
+        )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -388,6 +388,7 @@ def resend_activation(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def password_reset(request):
     serializer = EmailSerializer(data=request.data)
@@ -396,27 +397,13 @@ def password_reset(request):
         User = get_user_model()
         try:
             user = User.objects.get(email=email)
-
             if can_send_password_reset_email(user.id):
                 if send_password_reset_email(request, user):
                     set_password_reset_email_sent(user.id)
-                    return Response({"message": "Password reset email sent successfully."}, status=status.HTTP_200_OK)
-                else:
-                    return Response(
-                        {"error": "An unexpected error occurred. Please try again later."},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
-            else:
-                return Response(
-                    {"error": "Please wait 10 minutes before requesting another password reset."},
-                    status=status.HTTP_429_TOO_MANY_REQUESTS,
-                )
-
         except User.DoesNotExist:
             pass
-        # To prevent user enumeration, we'll show the same message as if the email was sent
         return Response(
-            {"message": "If an account exists with this email, a password reset link has been sent."},
+            {"message": "If an account with that email address exists, a password reset link has been sent."},
             status=status.HTTP_200_OK,
         )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -440,25 +427,29 @@ def password_reset(request):
     },
 )
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def password_reset_confirm(request, uidb64, token):
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = get_user_model()._default_manager.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, get_user_model().DoesNotExist):
+        user = None
+
     data = {
         "uid": uidb64,
         "token": token,
-        "new_password1": request.data.get("new_password1"),
-        "new_password2": request.data.get("new_password2"),
+        "new_password1": request.data.get("new_password1") if isinstance(request.data, dict) else None,
+        "new_password2": request.data.get("new_password2") if isinstance(request.data, dict) else None,
     }
-    serializer = PasswordResetConfirmSerializer(data=data)
+    serializer = PasswordResetConfirmSerializer(data=data, context={"user": user})
     if serializer.is_valid():
-        try:
-            uid = urlsafe_base64_decode(uidb64).decode()
-            user = get_user_model()._default_manager.get(pk=uid)
-        except (TypeError, ValueError, OverflowError, get_user_model().DoesNotExist):
-            return Response({"error": "Invalid reset link."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if default_token_generator.check_token(user, token):
-            user.set_password(serializer.validated_data["new_password1"])
-            user.save()
+        if user is not None and default_token_generator.check_token(user, token):
+            with transaction.atomic():
+                user = get_user_model().objects.select_for_update().get(pk=user.pk)
+                user.set_password(serializer.validated_data["new_password1"])
+                user.jwt_token_version += 1
+                user.save(update_fields=["password", "jwt_token_version"])
             return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)
         else:
             return Response({"error": "Invalid reset link."}, status=status.HTTP_400_BAD_REQUEST)
@@ -480,13 +471,18 @@ def password_reset_confirm(request, uidb64, token):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def logout_view(request):
-    refresh_token = request.COOKIES.get("refresh")
+    if request.COOKIES.get("refresh") or request.COOKIES.get("access"):
+        enforce_csrf(request)
+
+    refresh_token = request.COOKIES.get("refresh") or (
+        request.data.get("refresh") if isinstance(request.data, dict) else None
+    )
 
     if refresh_token:
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
-        except (TokenError, IntegrityError):
+        except (TokenError, IntegrityError, AttributeError):
             # Token is already invalid, blacklisted, or DB constraint already met
             pass
 
@@ -550,30 +546,48 @@ def current_user(request):
 @permission_classes([AllowAny])
 def token_refresh(request):
     refresh_token = request.COOKIES.get("refresh")
+    if refresh_token:
+        enforce_csrf(request)
+    else:
+        refresh_token = request.data.get("refresh") if isinstance(request.data, dict) else None
+
     if not refresh_token:
         return Response({"error": "No refresh token provided"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        refresh = RefreshToken(refresh_token)
-        access_token = str(refresh.access_token)
+        with transaction.atomic():
+            refresh = RefreshToken(refresh_token)
+            user_id = refresh.get("user_id")
+            User = get_user_model()
+            user = User.objects.select_for_update().get(id=user_id)
 
-        # Blacklist the old refresh token
-        try:
-            refresh.blacklist()
-        except (TokenError, IntegrityError, AttributeError):
-            pass
+            token_version = refresh.get("jwt_token_version")
+            if token_version != user.jwt_token_version:
+                raise TokenError("Token has been revoked")
 
-        # Rotate the refresh token
-        refresh.set_jti()
-        refresh.set_exp()
+            try:
+                refresh.blacklist()
+            except (TokenError, IntegrityError, AttributeError):
+                if settings.SIMPLE_JWT.get("BLACKLIST_AFTER_ROTATION"):
+                    raise TokenError("Token is blacklisted")
 
-        response = Response({"message": "Token refreshed successfully"})
+            new_refresh = RefreshToken.for_user(user)
+            token_version = getattr(user, "jwt_token_version", 0)
+            new_refresh["jwt_token_version"] = token_version
 
-        response.set_cookie("access", access_token, httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/")
-        response.set_cookie("refresh", str(refresh), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/")
-        return response
-    except TokenError:
-        # If refresh fails, clear cookies to prevent further attempts
+            access_token = new_refresh.access_token
+            access_token["jwt_token_version"] = token_version
+
+            response = Response({"message": "Token refreshed successfully"})
+
+            response.set_cookie(
+                "access", str(access_token), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/"
+            )
+            response.set_cookie(
+                "refresh", str(new_refresh), httponly=True, samesite="Lax", secure=not settings.DEBUG, path="/"
+            )
+            return response
+    except (TokenError, get_user_model().DoesNotExist, ValueError, TypeError):
         response = Response({"error": "Invalid refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
         response.delete_cookie("access", path="/")
         response.delete_cookie("refresh", path="/")

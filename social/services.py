@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.db.models import F
+from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from accounts.models import Agent, Account
 from main_api.models import ResearchNode
@@ -135,7 +136,7 @@ def execute_kick(agent, node):
         from main_api.tasks import TREASURY_USERNAME
 
         Account.objects.filter(username=TREASURY_USERNAME).update(
-            balance_blue_stars=F("balance_blue_stars") + stake_amount
+            balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
         )
 
         # 2. Prevent Bounty Stealing (Refund the kicked agent's share to the Coordinator)
@@ -145,11 +146,11 @@ def execute_kick(agent, node):
             kicked_share = Decimal("0.0000")
 
         locked_node.forfeited_bounty += kicked_share
-        locked_node.save(update_fields=["forfeited_bounty"])
+        locked_node.save(update_fields=["forfeited_bounty", "updated"])
 
         if locked_node.coordinating_agent:
             Account.objects.filter(id=locked_node.coordinating_agent.maintainer_id).update(
-                balance_blue_stars=F("balance_blue_stars") + kicked_share
+                balance_blue_stars=F("balance_blue_stars") + kicked_share, updated_at=timezone.now()
             )
             Notification.objects.create(
                 recipient=locked_node.coordinating_agent.maintainer,
@@ -166,7 +167,7 @@ def execute_kick(agent, node):
         if locked_agent.orange_stars < Decimal("-20.0000"):  # BAN_THRESHOLD_OS
             locked_agent.is_active = False
 
-        locked_agent.save(update_fields=["orange_stars", "is_active"])
+        locked_agent.save(update_fields=["orange_stars", "is_active", "updated_at"])
 
         # 4. Notify kicked maintainer
         Notification.objects.create(

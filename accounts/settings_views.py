@@ -2,6 +2,7 @@ import logging
 from rest_framework import status
 from typing import cast, Any
 from django.conf import settings
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,9 @@ def send_verification_email(request, account, new_email):
     signed_email = sign_email(new_email)
     verification_link = f"{settings.FRONTEND_URL}/verify-email/{uidb64}/{token}/{signed_email}"
 
-    cast(Any, send_async_verification_email).delay(account.id, new_email, verification_link)
+    transaction.on_commit(
+        lambda: cast(Any, send_async_verification_email).delay(account.id, new_email, verification_link)
+    )
     return True
 
 
@@ -114,16 +117,17 @@ def personal_information(request):
     update_last_successful_update_time(user)
 
     new_email = serializer.validated_data.get("email")
-    if new_email and new_email != user.email:
-        send_verification_email(request, user, new_email)
+    with transaction.atomic():
+        if new_email and new_email != user.email:
+            serializer.save()
+            send_verification_email(request, user, new_email)
+            return Response(
+                {
+                    "message": "We have sent you a validation link at your new email. If you cannot verify your email, it will stay as before."
+                },
+                status=status.HTTP_200_OK,
+            )
         serializer.save()
-        return Response(
-            {
-                "message": "We have sent you an validation link at your new email. If you cannot verify your email, it will stay as before."
-            },
-            status=status.HTTP_200_OK,
-        )
-    serializer.save()
 
     return Response({"message": "Personal information updated successfully."}, status=status.HTTP_200_OK)
 
@@ -163,13 +167,18 @@ def verify_email(request, uidb64, token, signed_email):
 
     if user is not None and new_email is not None and default_token_generator.check_token(user, token):
         # Verify that the new email is not already in use
-        if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
             return Response({"error": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Update the user's email
-        user.email = new_email
-        user.save(update_fields=["email"])
-        return Response({"message": "Email successfully verified and updated."}, status=status.HTTP_200_OK)
+        from django.db import IntegrityError
+
+        try:
+            user.email = new_email
+            user.save(update_fields=["email"])
+            return Response({"message": "Email successfully verified and updated."}, status=status.HTTP_200_OK)
+        except IntegrityError:
+            return Response({"error": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
     else:
         return Response({"error": "Invalid verification link."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -213,36 +222,11 @@ def delete_account(request):
         return Response({"error": "Invalid password"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        from main_api.models import ResearchNode
-        from social.models import Notification
-        from django.db import transaction
-        from django.db.models import F
-        from decimal import Decimal
-        from main_api.tasks import STAKE_RATE
-        from accounts.models import Account
+        from main_api.services import cleanup_agent_active_node_commitments
 
         with transaction.atomic():
-            # 1. Abort and refund workers for any active nodes coordinated by this user
-            active_nodes = ResearchNode.objects.filter(
-                coordinating_agent__maintainer=user,
-                status__in=["open", "in_progress", "in_review", "awaiting_coordinator"],
-            )
-
-            for node in active_nodes:
-                stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
-                for agent in node.assigned_agents.all():
-                    if agent.maintainer_id != user.id:
-                        Account.objects.filter(id=agent.maintainer_id).update(
-                            balance_blue_stars=F("balance_blue_stars") + stake_amount
-                        )
-                        Notification.objects.create(
-                            recipient_id=agent.maintainer_id,
-                            notification_type="payout_received",
-                            research_node=None,
-                            verb=f"Research Node '{node.title}' was aborted by the coordinator. Stake of {stake_amount} Blue Stars refunded.",
-                        )
-
-            # Delete the user account (which will cascade and delete the nodes)
+            for agent in user.agents.all():
+                cleanup_agent_active_node_commitments(agent)
             user.delete()
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:

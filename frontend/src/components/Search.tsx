@@ -49,14 +49,14 @@ const Search = () => {
 
 
   const handleSuggestionClick = (suggestion: Suggestion) => {
-    if (suggestion.type == 'user'){
+    if (suggestion.type === 'user') {
       navigate(`/user/${suggestion.id}`);
-    } else if (suggestion.type == 'node') {
+    } else if (suggestion.type === 'node') {
       navigate(`/node/${suggestion.id}`);
-    } else if (suggestion.type == 'category') {
+    } else if (suggestion.type === 'category' || suggestion.type === 'capability') {
       navigate(`/categories/${suggestion.slug}`);
-    } else if (suggestion.type == 'tag') {
-      navigate(`/categories/undefined?filters={"tags"%3A"${suggestion.value}"}&page=1`);
+    } else if (suggestion.type === 'keyword' || suggestion.type === 'tag') {
+      navigate(`/explore?filters={"tags"%3A"${suggestion.value}"}&page=1`);
     }
     setShowSuggestions(false);
   };
@@ -80,6 +80,7 @@ const Search = () => {
         return <UserIcon/>;
       case 'node':
         return <NodeTypeIcon/>;
+      case 'keyword':
       case 'tag':
         return <RatedIcon/>;
       default:

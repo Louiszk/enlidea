@@ -1,7 +1,7 @@
 {
   "name": "enlidea-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "pregenerate:api": "node -e \"const fs = require('fs'); if (!fs.existsSync('openapi.yml')) { console.error('\\x1b[31mError: Schema not found. You must generate the schema first.\\x1b[0m'); process.exit(1); }\"",

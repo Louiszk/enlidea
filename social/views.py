@@ -8,11 +8,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from accounts.models import Agent, Account
 from accounts.authentication import CookieJWTAuthentication
-from main_api.models import ResearchNode, Paper
+from main_api.models import ResearchNode, Paper, Trend
 from main_api.authentication import AgentApiKeyAuthentication
 from main_api.permissions import IsNotPublicAgent
 from .models import Notification, Appreciation, Report, Complaint
-from .serializers import NotificationSerializer, FollowSerializer
+from .serializers import NotificationSerializer, FollowSerializer, ReportSerializer, ComplaintSerializer
 from main_api.serializer import ResearchNodeCardSerializer, AgentSerializer, PaperSerializer
 from django.db.models import F, Sum, Q
 from django.db import transaction
@@ -113,12 +113,15 @@ def appreciate_paper(request, paper_id):
                 try:
                     updated_rows = Account.objects.filter(
                         username=TREASURY_USERNAME, balance_blue_stars__gte=APPRECIATION_BS_REWARD
-                    ).update(balance_blue_stars=F("balance_blue_stars") - APPRECIATION_BS_REWARD)
+                    ).update(
+                        balance_blue_stars=F("balance_blue_stars") - APPRECIATION_BS_REWARD, updated_at=timezone.now()
+                    )
 
                     if updated_rows > 0:
                         # 2. Reward Maintainer
                         Account.objects.filter(id=request.user.id).update(
-                            balance_blue_stars=F("balance_blue_stars") + APPRECIATION_BS_REWARD
+                            balance_blue_stars=F("balance_blue_stars") + APPRECIATION_BS_REWARD,
+                            updated_at=timezone.now(),
                         )
 
                         Notification.objects.create(
@@ -361,6 +364,14 @@ def save_node(request, node_id):
 
         user.save(update_fields=["saved_nodes"])
 
+        if is_saved:
+            try:
+                node_obj = ResearchNode.objects.get(id=node_id)
+                trend, _ = Trend.objects.get_or_create(research_node=node_obj)
+                trend.update_metrics(saves=1)
+            except Exception:
+                pass
+
     return Response({"message": message, "saved": is_saved}, status=status.HTTP_200_OK)
 
 
@@ -426,7 +437,7 @@ def save_paper(request, paper_id):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def leaderboard(request):
-    from django.core.paginator import Paginator
+    from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
     from main_api.tasks import TREASURY_USERNAME
 
     page = request.GET.get("page", 1)
@@ -440,8 +451,10 @@ def leaderboard(request):
     paginator = Paginator(top_agents, items_per_page)
     try:
         current_page = paginator.page(page)
-    except:
+    except PageNotAnInteger:
         current_page = paginator.page(1)
+    except EmptyPage:
+        current_page = []
 
     serializer = AgentSerializer(current_page, many=True)
     return Response({"agents": serializer.data}, status=status.HTTP_200_OK)
@@ -497,12 +510,15 @@ def leaderboard(request):
 def report_content(request):
     target_type_str = request.data.get("target_type")
     target_id = request.data.get("target_id")
-    reason = request.data.get("reason")
-    description = request.data.get("description")
-    node_id_context = request.data.get("node_id")  # New field for context
+    node_id_context = request.data.get("node_id")
 
-    if not all([target_type_str, target_id, reason, description]):
-        return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+    if not all([target_type_str, target_id]):
+        return Response({"error": "Missing target fields."}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = ReportSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    reason = serializer.validated_data["reason"]
+    description = serializer.validated_data["description"]
 
     # Map target type to ContentType
     type_map = {"node": ResearchNode, "agent": Agent, "account": User}
@@ -616,12 +632,11 @@ def submit_complaint(request):
     if isinstance(request.user, Agent):
         return Response({"error": "Only human accounts can submit complaints."}, status=status.HTTP_403_FORBIDDEN)
 
-    category = request.data.get("category")
-    description = request.data.get("description")
-    reference_id = request.data.get("reference_id")
-
-    if not all([category, description]):
-        return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = ComplaintSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    category = serializer.validated_data["category"]
+    description = serializer.validated_data["description"]
+    reference_id = serializer.validated_data.get("reference_id")
 
     # Rate Limiting
     user_id = request.user.id

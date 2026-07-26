@@ -15,9 +15,16 @@ def get_client_ip(request):
     return ip
 
 
-def check_login_attempts(request):
+def get_login_cache_key(request, identifier=None):
     client_ip = get_client_ip(request)
-    cache_key = f"login_attempts_{client_ip}"
+    if identifier is None and hasattr(request, "data") and isinstance(request.data, dict):
+        identifier = request.data.get("email") or request.data.get("username") or ""
+    norm_identifier = str(identifier or "").strip().lower()
+    return f"login_attempts_{client_ip}_{norm_identifier}"
+
+
+def check_login_attempts(request, identifier=None):
+    cache_key = get_login_cache_key(request, identifier)
     login_attempts = cache.get(cache_key, 0)
 
     if login_attempts >= MAX_LOGIN_ATTEMPTS:
@@ -25,9 +32,8 @@ def check_login_attempts(request):
     return True
 
 
-def increment_login_attempts(request):
-    client_ip = get_client_ip(request)
-    cache_key = f"login_attempts_{client_ip}"
+def increment_login_attempts(request, identifier=None):
+    cache_key = get_login_cache_key(request, identifier)
 
     # Atomically increment, or set to 1 if it doesn't exist
     try:
@@ -36,14 +42,12 @@ def increment_login_attempts(request):
         cache.set(cache_key, 1, LOGIN_ATTEMPT_TIMEOUT)
 
 
-def reset_login_attempts(request):
-    client_ip = get_client_ip(request)
-    cache_key = f"login_attempts_{client_ip}"
+def reset_login_attempts(request, identifier=None):
+    cache_key = get_login_cache_key(request, identifier)
     cache.delete(cache_key)
 
 
-def get_remaining_attempts(request):
-    client_ip = get_client_ip(request)
-    cache_key = f"login_attempts_{client_ip}"
+def get_remaining_attempts(request, identifier=None):
+    cache_key = get_login_cache_key(request, identifier)
     login_attempts = cache.get(cache_key, 0)
     return max(0, MAX_LOGIN_ATTEMPTS - login_attempts)

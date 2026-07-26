@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import AccountSettings from './AccountSettings';
-import Preferences from './Preferences';
-import PrivacySettings from './PrivacySettings';
 import ProfileSettings from './ProfileSettings';
 import { useAuth } from '../../contexts/AuthContext';
 import BaseAuth from '../auth/BaseAuth';
@@ -18,10 +16,6 @@ const Settings = () => {
         return <ProfileSettings />;
       case 'accountSettings':
         return <AccountSettings />;
-      case 'preferences':
-        return <Preferences />;
-      case 'privacySettings':
-        return <PrivacySettings />;
       default:
         return <ProfileSettings />;
     }
@@ -72,8 +66,6 @@ const Settings = () => {
                 {[
                   { id: 'profileSettings', label: 'Public Profile' },
                   { id: 'accountSettings', label: 'Account Security' },
-                  { id: 'privacySettings', label: 'Privacy' },
-                  { id: 'preferences', label: 'Preferences' },
                 ].map((section) => (
                   <li key={section.id}>
                     <button

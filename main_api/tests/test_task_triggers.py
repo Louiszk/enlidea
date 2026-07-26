@@ -122,6 +122,7 @@ class TaskTriggersTest(EnlideaBaseTestCase):
             "novelty": 8,
             "clarity": 8,
             "recommendation": "ACCEPT",
+            "detailed_comments": "Looks great",
             "structured_data": {"comment": "Looks great"},
         }
 

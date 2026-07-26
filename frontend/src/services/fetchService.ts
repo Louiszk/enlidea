@@ -20,7 +20,7 @@ import { Suggestion } from '../components/Search';
 
 export const fetchCapabilitySearch = async (query: string): Promise<Capability[]> => {
   try {
-    const response = await apiClient.get<Capability[]>('/v1/capabilities/search/', { params: { q: query } });
+    const response = await apiClient.get<Capability[]>('v1/capabilities/search/', { params: { q: query } });
     return response.data;
   } catch (_error) {
     throw new Error('Network response was not ok');
@@ -29,7 +29,7 @@ export const fetchCapabilitySearch = async (query: string): Promise<Capability[]
 
 export const fetchKeywords = async (query: string): Promise<ResearchKeyword[]> => {
   try {
-    const response = await apiClient.get<ResearchKeyword[]>('/v1/keywords/search/', { params: { q: query } });
+    const response = await apiClient.get<ResearchKeyword[]>('v1/keywords/search/', { params: { q: query } });
     return response.data;
   } catch (_error) {
     throw new Error('Network response was not ok');
@@ -39,7 +39,7 @@ export const fetchKeywords = async (query: string): Promise<ResearchKeyword[]> =
 export const fetchCapabilities = async (parent: number | string | null = null): Promise<Capability[]> => {
   try {
     const params = parent ? { parent } : {};
-    const response = await apiClient.get<Capability[]>('/v1/capabilities/', { params });
+    const response = await apiClient.get<Capability[]>('v1/capabilities/', { params });
     return response.data;
   } catch (_error) {
     throw new Error('Network response was not ok');
@@ -55,7 +55,7 @@ export const fetchPapers = async (page: number = 1, filters: Record<string, unkn
     if (saved) {
       params.saved = true;
     }
-    const response = await apiClient.get<PaperListResponse>('/v1/papers/', { params });
+    const response = await apiClient.get<PaperListResponse>('v1/papers/', { params });
     return response.data;
   } catch (_error) {
     throw new Error('Failed to fetch papers');
@@ -64,7 +64,7 @@ export const fetchPapers = async (page: number = 1, filters: Record<string, unkn
 
 export const fetchPaperDetail = async (id: number | string): Promise<Paper> => {
   try {
-    const response = await apiClient.get<Paper>(`/v1/papers/${id}/`);
+    const response = await apiClient.get<Paper>(`v1/papers/${id}/`);
     return response.data;
   } catch (_error) {
     throw new Error('Failed to fetch paper detail');
@@ -73,13 +73,18 @@ export const fetchPaperDetail = async (id: number | string): Promise<Paper> => {
 
 export const fetchCapabilityNodes = async (capabilitySlug: string, page: number, sortBy: string, filterString?: string): Promise<ResearchNodeListResponse> => {
   try {
-    const response = await apiClient.get<ResearchNodeListResponse>('/v1/nodes/', {
+    const response = await apiClient.get<ResearchNodeListResponse>('v1/nodes/', {
       params: { page, sort: sortBy, capability: capabilitySlug, filters: filterString }
     });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
-      throw error.response.data;
+      const message = error.response.data?.detail || error.response.data?.message || 'Capability nodes not found';
+      const err = new Error(message);
+      if (typeof error.response.data === 'object' && error.response.data !== null) {
+        Object.assign(err, error.response.data);
+      }
+      throw err;
     }
     throw new Error('Failed to fetch capability nodes');
   }
@@ -87,7 +92,7 @@ export const fetchCapabilityNodes = async (capabilitySlug: string, page: number,
 
 export const fetchNodeDetail = async (id: number | string): Promise<ResearchNode> => {
   try {
-    const response = await apiClient.get<ResearchNode>(`/v1/nodes/${id}/`);
+    const response = await apiClient.get<ResearchNode>(`v1/nodes/${id}/`);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
@@ -101,7 +106,7 @@ export const fetchNodeDetail = async (id: number | string): Promise<ResearchNode
 
 export const fetchNodeBody = async (id: number | string): Promise<string> => {
   try {
-    const response = await apiClient.get<ResearchNode>(`/v1/nodes/${id}/`);
+    const response = await apiClient.get<ResearchNode>(`v1/nodes/${id}/`);
     return response.data.body;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && (error.response.status === 403 || error.response.status === 401)) {
@@ -113,7 +118,7 @@ export const fetchNodeBody = async (id: number | string): Promise<string> => {
 
 export const fetchUserProfile = async (userId: number | string): Promise<UserProfile> => {
   try {
-    const response = await apiClient.get(`/dashboard/user/${userId}/`);
+    const response = await apiClient.get(`dashboard/user/${userId}/`);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
@@ -131,7 +136,7 @@ export const fetchSavedNodes = async (userId: number | string | undefined, isSav
     } else if (userId !== undefined) {
       params.maintainer = userId;
     }
-    const response = await apiClient.get<ResearchNodeListResponse>('/v1/nodes/', { params });
+    const response = await apiClient.get<ResearchNodeListResponse>('v1/nodes/', { params });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
@@ -143,7 +148,7 @@ export const fetchSavedNodes = async (userId: number | string | undefined, isSav
 
 export const fetchTrendingData = async (): Promise<TrendingResponse> => {
   try {
-    const response = await apiClient.get<TrendingResponse>('/dashboard/trending/');
+    const response = await apiClient.get<TrendingResponse>('dashboard/trending/');
     return response.data;
   } catch (error) {
     console.error('Error fetching trending data:', error);
@@ -153,7 +158,7 @@ export const fetchTrendingData = async (): Promise<TrendingResponse> => {
 
 export const fetchHighImpactData = async (): Promise<HighImpactCategory[]> => {
   try {
-    const response = await apiClient.get<HighImpactCategory[]>('/dashboard/high-impact/');
+    const response = await apiClient.get<HighImpactCategory[]>('dashboard/high-impact/');
     return response.data;
   } catch (error) {
     console.error('Error fetching high-impact research data:', error);
@@ -163,7 +168,7 @@ export const fetchHighImpactData = async (): Promise<HighImpactCategory[]> => {
 
 export const fetchSuggestions = async (query: string): Promise<Suggestion[]> => {
   try {
-    const response = await apiClient.get('/v1/suggestions/', { params: { q: query } });
+    const response = await apiClient.get('v1/suggestions/', { params: { q: query } });
     return response.data;
   } catch (_error) {
     throw new Error('Network response was not ok');
@@ -172,7 +177,7 @@ export const fetchSuggestions = async (query: string): Promise<Suggestion[]> => 
 
 export const fetchSearchResults = async (query: string | null, page: number = 1): Promise<SearchResultItem[]> => {
   try {
-    const response = await apiClient.get<SearchResultItem[]>('/v1/search/', { params: { q: query, page } });
+    const response = await apiClient.get<SearchResultItem[]>('v1/search/', { params: { q: query, page } });
     return response.data;
   } catch (_error) {
     throw new Error('Network response was not ok');
@@ -181,7 +186,7 @@ export const fetchSearchResults = async (query: string | null, page: number = 1)
 
 export const fetchAgents = async (): Promise<Agent[]> => {
   try {
-    const response = await apiClient.get<Agent[]>('/v1/agents/');
+    const response = await apiClient.get<Agent[]>('v1/agents/');
     return response.data;
   } catch (_error) {
     throw new Error('Failed to fetch agents');
@@ -190,7 +195,7 @@ export const fetchAgents = async (): Promise<Agent[]> => {
 
 export const fetchActiveAssignments = async (page: number = 1, sortBy?: string, searchTerm?: string): Promise<ResearchNodeListResponse> => {
   try {
-    const response = await apiClient.get<ResearchNodeListResponse>('/v1/nodes/active/', {
+    const response = await apiClient.get<ResearchNodeListResponse>('v1/nodes/active/', {
       params: { page, sort: sortBy, search: searchTerm }
     });
     return response.data;
@@ -207,7 +212,7 @@ export const fetchActiveAssignments = async (page: number = 1, sortBy?: string, 
 
 export const fetchDirectives = async (): Promise<AgentDirective[]> => {
   try {
-    const response = await apiClient.get<AgentDirective[]>('/v1/directives/');
+    const response = await apiClient.get<AgentDirective[]>('v1/directives/');
     return response.data;
   } catch (_error) {
     throw new Error('Failed to fetch directives');
@@ -216,7 +221,7 @@ export const fetchDirectives = async (): Promise<AgentDirective[]> => {
 
 export const fetchPendingReviews = async (): Promise<PeerReview[]> => {
   try {
-    const response = await apiClient.get<PeerReview[]>('/v1/reviews/');
+    const response = await apiClient.get<PeerReview[]>('v1/reviews/');
     return response.data;
   } catch (_error) {
     throw new Error('Failed to fetch review offers');
@@ -225,7 +230,7 @@ export const fetchPendingReviews = async (): Promise<PeerReview[]> => {
 
 export const checkAgentName = async (name: string): Promise<CheckAgentNameResponse> => {
   try {
-    const response = await apiClient.get<CheckAgentNameResponse>('/v1/agents/check_name/', { params: { name } });
+    const response = await apiClient.get<CheckAgentNameResponse>('v1/agents/check_name/', { params: { name } });
     return response.data;
   } catch (_error) {
     throw new Error('Failed to check agent name availability');

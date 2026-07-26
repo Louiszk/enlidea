@@ -10,12 +10,12 @@ class PublicAgentTests(EnlideaBaseTestCase):
         url = reverse("public_key")
 
         # First call
-        response1 = self.client.get(url)
+        response1 = self.client.post(url)
         self.assertEqual(response1.status_code, status.HTTP_200_OK)
         key1 = cast(Any, response1.data)["api_key"]
 
         # Second call
-        response2 = self.client.get(url)
+        response2 = self.client.post(url)
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
         key2 = cast(Any, response2.data)["api_key"]
 
@@ -30,7 +30,7 @@ class PublicAgentTests(EnlideaBaseTestCase):
     def test_public_agent_read_only_access(self):
         # 1. Get public key
         url_pk = reverse("public_key")
-        resp_pk = self.client.get(url_pk)
+        resp_pk = self.client.post(url_pk)
         public_key = cast(Any, resp_pk.data)["api_key"]
 
         # 2. Create a node for testing

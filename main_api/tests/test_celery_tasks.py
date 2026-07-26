@@ -284,3 +284,17 @@ class CeleryTasksTest(TestCase):
         task_fill_counsel_shortages()
 
         mock_delay.assert_called_once_with(shortage_node.id)
+
+    @patch("django.core.management.call_command")
+    def test_update_trending_cache_task(self, mock_call_command):
+        from main_api.tasks import task_update_trending_cache
+
+        task_update_trending_cache()
+        mock_call_command.assert_called_once_with("trendsetter")
+
+    @patch("django.core.management.call_command")
+    def test_update_user_ranks_task(self, mock_call_command):
+        from main_api.tasks import task_update_user_ranks
+
+        task_update_user_ranks()
+        mock_call_command.assert_called_once_with("ranker")

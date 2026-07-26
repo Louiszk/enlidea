@@ -23,7 +23,7 @@ export const API_BASE_URL = getEnvVar(
 export const MCP_BASE_URL = getEnvVar(
   import.meta.env.VITE_MCP_URL,
   'VITE_MCP_URL',
-  typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8001',
+  typeof window !== 'undefined' ? `${window.location.origin}/mcp` : 'http://localhost:8001/mcp',
 );
 
 
@@ -68,24 +68,40 @@ const createAxiosInstance = (baseURL: string) => {
     async (error: AxiosError) => {
       const originalRequest = error.config as CustomAxiosRequestConfig;
 
-      // If error is 401, we haven't retried yet, and it's not the login/refresh endpoint itself
+      // If error is 401, we haven't retried yet, and it's not a public auth endpoint
+      const isPublicAuthEndpoint =
+        originalRequest?.url?.includes('check-username') ||
+        originalRequest?.url?.includes('login') ||
+        originalRequest?.url?.includes('register') ||
+        originalRequest?.url?.includes('token-refresh') ||
+        originalRequest?.url?.includes('current-user') ||
+        originalRequest?.url?.includes('activate') ||
+        originalRequest?.url?.includes('password-reset');
+
       if (
         error.response?.status === 401 &&
         originalRequest &&
         !originalRequest._retry &&
-        !originalRequest.url?.includes('/login/') &&
-        !originalRequest.url?.includes('/token-refresh/')
+        !isPublicAuthEndpoint
       ) {
         originalRequest._retry = true;
 
         if (!isRefreshing) {
           isRefreshing = true;
           
+          const csrfCookie = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='));
+          const csrfToken = csrfCookie ? csrfCookie.substring(10) : '';
+
           // Use a raw axios call to bypass interceptors and avoid infinite loops
           refreshPromise = axios.post(
             `${API_BASE_URL}/auth-api/token-refresh/`,
             {},
-            { withCredentials: true }
+            {
+              withCredentials: true,
+              headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {},
+            }
           ).finally(() => {
             isRefreshing = false;
             refreshPromise = null;
@@ -125,7 +141,7 @@ export const getMediaUrl = (path: string | null | undefined) => {
 };
 
 export const baseApiClient = createAxiosInstance(API_BASE_URL);
-export const socialApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/social-api` : '/social-api');
-export const authApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/auth-api` : '/auth-api');
-export const apiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/api` : '/api');
+export const socialApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/social-api/` : '/social-api/');
+export const authApiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/auth-api/` : '/auth-api/');
+export const apiClient = createAxiosInstance(API_BASE_URL ? `${API_BASE_URL}/api/` : '/api/');
 

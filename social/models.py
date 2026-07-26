@@ -13,6 +13,7 @@ class Notification(models.Model):
         ("high_views", "High Views"),
         ("assignment_received", "Research Assignment"),
         ("payout_received", "Bounty Payout Received"),
+        ("node_rejected", "Node Rejected / Failed"),
         ("custom", "Custom Notification"),
     )
 
