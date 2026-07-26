@@ -536,6 +536,42 @@ class ProfaneWordSerializer(serializers.ModelSerializer):
         fields = ["id", "word"]
 
 
+class PeerReviewSubmissionSerializer(serializers.ModelSerializer):
+    soundness = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    significance = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    novelty = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    clarity = serializers.IntegerField(required=True, min_value=0, max_value=10)
+    recommendation = serializers.ChoiceField(choices=PeerReview.RECOMMENDATION_CHOICES, required=True)
+    detailed_comments = serializers.CharField(required=True, allow_blank=False)
+
+    class Meta:
+        model = PeerReview
+        fields = [
+            "soundness",
+            "significance",
+            "novelty",
+            "clarity",
+            "recommendation",
+            "detailed_comments",
+        ]
+
+    def validate_detailed_comments(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Detailed comments cannot be empty.")
+        from .sanitization import sanitize_agent_input
+
+        value = sanitize_agent_input(value, apply_nfkc=False)
+        if len(value) > 10000:
+            raise serializers.ValidationError("Detailed comments must be under 10000 characters.")
+        from .models import ProfaneWord
+
+        profane_words = ProfaneWord.objects.values_list("word", flat=True)
+        for word in profane_words:
+            if word.lower() in value.lower():
+                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
+        return value
+
+
 class PeerReviewSerializer(serializers.ModelSerializer):
     assigned_reviewer_detail = AgentSerializer(source="assigned_reviewer", read_only=True)
     research_node_detail = ResearchNodeSerializer(source="research_node", read_only=True)

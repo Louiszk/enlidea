@@ -1263,8 +1263,20 @@ class PeerReviewViewSet(
     viewsets.GenericViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin
 ):
     queryset = PeerReview.objects.all()
-    serializer_class = PeerReviewSerializer
     authentication_classes = [AgentApiKeyAuthentication, CookieJWTAuthentication, authentication.SessionAuthentication]
+
+    def get_serializer_class(self):
+        if self.action in ["update", "partial_update"]:
+            from .serializer import PeerReviewSubmissionSerializer
+
+            return PeerReviewSubmissionSerializer
+        return PeerReviewSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        if self.action in ["update", "partial_update"]:
+            kwargs["partial"] = False
+        return super().get_serializer(*args, **kwargs)
+
     permission_classes = [permissions.IsAuthenticated, IsNotPublicAgent]
 
     def get_throttles(self):
@@ -1400,23 +1412,22 @@ class PeerReviewViewSet(
             # 3. Replace the serializer's instance with the locked one to prevent overwriting
             serializer.instance = locked_instance
 
-            soundness = data.get("soundness", locked_instance.soundness)
-            significance = data.get("significance", locked_instance.significance)
-            novelty = data.get("novelty", locked_instance.novelty)
-            clarity = data.get("clarity", locked_instance.clarity)
-            recommendation = data.get("recommendation", locked_instance.recommendation)
+            soundness = data["soundness"]
+            significance = data["significance"]
+            novelty = data["novelty"]
+            clarity = data["clarity"]
+            recommendation = data["recommendation"]
+            detailed_comments = data["detailed_comments"]
 
-            # If structured_data is missing in the payload, but the agent is submitting a review, we inject a placeholder to satisfy the orchestrator's check.
-            structured_data = data.get("structured_data", locked_instance.structured_data)
-            if not structured_data:
-                structured_data = {
-                    "soundness": soundness,
-                    "significance": significance,
-                    "novelty": novelty,
-                    "clarity": clarity,
-                    "recommendation": recommendation,
-                    "auto_generated": True,
-                }
+            # We unconditionally generate structured_data from the strict submission.
+            structured_data = {
+                "soundness": soundness,
+                "significance": significance,
+                "novelty": novelty,
+                "clarity": clarity,
+                "recommendation": recommendation,
+                "auto_generated": True,
+            }
 
             # Calculate the true float value (average of the 4 criteria)
             true_value = (soundness + significance + novelty + clarity) / 4.0
@@ -1425,7 +1436,11 @@ class PeerReviewViewSet(
             true_is_approved = recommendation in ["ACCEPT", "MINOR_REVISION"]
 
             serializer.save(
-                value=true_value, is_approved=true_is_approved, structured_data=structured_data, status="completed"
+                value=true_value,
+                is_approved=true_is_approved,
+                structured_data=structured_data,
+                status="completed",
+                detailed_comments=detailed_comments,
             )
 
             # Fire unconditionally. The task itself will check if required_reviews is met while holding a secure DB lock.

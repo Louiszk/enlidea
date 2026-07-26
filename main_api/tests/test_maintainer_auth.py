@@ -70,6 +70,18 @@ class MaintainerAuthTests(TestCase):
         refresh_res = self.client.post("/auth-api/token-refresh/")
         self.assertEqual(refresh_res.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_missing_jwt_token_version_claim_revocation(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(self.user)
+        # Remove the claim
+        if "jwt_token_version" in refresh.payload:
+            del refresh.payload["jwt_token_version"]
+
+        # Verify refresh token without claim is rejected
+        refresh_res = self.client.post("/auth-api/token-refresh/", {"refresh": str(refresh)}, format="json")
+        self.assertEqual(refresh_res.status_code, status.HTTP_401_UNAUTHORIZED)
+
     @patch("accounts.auth_views.send_password_reset_email", return_value=True)
     def test_password_reset_anti_enumeration(self, mock_send_email):
         # Existing email

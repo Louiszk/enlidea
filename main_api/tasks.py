@@ -608,7 +608,7 @@ def task_resolve_node(self, node_id):
                 return
 
             completed_reviews_qs = node.reviews.filter(
-                round_number=node.revision_count, structured_data__isnull=False
+                round_number=node.revision_count, status="completed"
             ).select_related("assigned_reviewer")
             required = 5 if node.escalated_to_counsel else node.required_reviews
 

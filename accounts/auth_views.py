@@ -556,7 +556,7 @@ def token_refresh(request):
             user = User.objects.select_for_update().get(id=user_id)
 
             token_version = refresh.get("jwt_token_version")
-            if token_version is not None and token_version != user.jwt_token_version:
+            if token_version != user.jwt_token_version:
                 raise TokenError("Token has been revoked")
 
             try:

@@ -1216,13 +1216,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PeerReviewRequest'
+              $ref: '#/components/schemas/PeerReviewSubmissionRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PeerReviewRequest'
+              $ref: '#/components/schemas/PeerReviewSubmissionRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PeerReviewRequest'
+              $ref: '#/components/schemas/PeerReviewSubmissionRequest'
+        required: true
       security:
       - cookieAuth: []
       responses:
@@ -1230,7 +1231,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PeerReview'
+                $ref: '#/components/schemas/PeerReviewSubmission'
           description: ''
     patch:
       operationId: api_v1_reviews_partial_update
@@ -1247,13 +1248,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedPeerReviewRequest'
+              $ref: '#/components/schemas/PatchedPeerReviewSubmissionRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedPeerReviewRequest'
+              $ref: '#/components/schemas/PatchedPeerReviewSubmissionRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedPeerReviewRequest'
+              $ref: '#/components/schemas/PatchedPeerReviewSubmissionRequest'
       security:
       - cookieAuth: []
       responses:
@@ -1261,7 +1262,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PeerReview'
+                $ref: '#/components/schemas/PeerReviewSubmission'
           description: ''
   /api/v1/reviews/{id}/respond/:
     post:
@@ -3635,7 +3636,7 @@ components:
         interview_prompt:
           type: string
           maxLength: 2000
-    PatchedPeerReviewRequest:
+    PatchedPeerReviewSubmissionRequest:
       type: object
       properties:
         soundness:
@@ -3654,22 +3655,11 @@ components:
           type: integer
           maximum: 10
           minimum: 0
-        confidence:
-          type: integer
-          maximum: 10
-          minimum: 0
-          nullable: true
-        detailed_comments:
-          type: string
-          maxLength: 10000
         recommendation:
           $ref: '#/components/schemas/PeerReviewRecommendationEnum'
-        structured_data:
-          type: object
-          additionalProperties: {}
-          nullable: true
-        status:
-          $ref: '#/components/schemas/PeerReviewStatusEnum'
+        detailed_comments:
+          type: string
+          minLength: 1
     PatchedResearchNodePlanRequest:
       type: object
       properties:
@@ -3828,6 +3818,67 @@ components:
         * `completed` - Completed
         * `rejected` - Rejected
         * `aborted` - Aborted
+    PeerReviewSubmission:
+      type: object
+      properties:
+        soundness:
+          type: integer
+          maximum: 10
+          minimum: 0
+        significance:
+          type: integer
+          maximum: 10
+          minimum: 0
+        novelty:
+          type: integer
+          maximum: 10
+          minimum: 0
+        clarity:
+          type: integer
+          maximum: 10
+          minimum: 0
+        recommendation:
+          $ref: '#/components/schemas/PeerReviewRecommendationEnum'
+        detailed_comments:
+          type: string
+      required:
+      - clarity
+      - detailed_comments
+      - novelty
+      - recommendation
+      - significance
+      - soundness
+    PeerReviewSubmissionRequest:
+      type: object
+      properties:
+        soundness:
+          type: integer
+          maximum: 10
+          minimum: 0
+        significance:
+          type: integer
+          maximum: 10
+          minimum: 0
+        novelty:
+          type: integer
+          maximum: 10
+          minimum: 0
+        clarity:
+          type: integer
+          maximum: 10
+          minimum: 0
+        recommendation:
+          $ref: '#/components/schemas/PeerReviewRecommendationEnum'
+        detailed_comments:
+          type: string
+          minLength: 1
+      required:
+      - clarity
+      - detailed_comments
+      - novelty
+      - recommendation
+      - significance
+      - soundness
     PersonalInformationErrorResponse:
       type: object
       properties:

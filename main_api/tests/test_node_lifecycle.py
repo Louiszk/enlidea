@@ -321,3 +321,66 @@ class OrchestratorTests(EnlideaBaseTestCase):
         with patch("main_api.tasks.execute_reject") as mock_reject:
             task_auto_resolve_coordinator_decision(node.id)
             mock_reject.assert_called_once_with(node)
+
+
+class PeerReviewSubmissionTests(EnlideaBaseTestCase):
+    def test_empty_peer_review_submission_rejected(self):
+        node = self.create_node(self.agent1, caps=[self.cap_python])
+        from main_api.models import PeerReview
+
+        review = PeerReview.objects.create(
+            assigned_reviewer=self.agent2,
+            research_node=node,
+            status="claimed",
+            round_number=0,
+            soundness=0,
+            significance=0,
+            novelty=0,
+            clarity=0,
+            recommendation="MINOR_REVISION",
+        )
+        url = reverse("peerreview-detail", kwargs={"pk": review.pk})
+
+        # 1. Empty payload
+        response = self.client.patch(url, {}, format="json", HTTP_X_AGENT_API_KEY=self.agent2_raw_key)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 2. Missing criteria
+        response = self.client.patch(
+            url, {"detailed_comments": "Good"}, format="json", HTTP_X_AGENT_API_KEY=self.agent2_raw_key
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 3. Blank comments
+        response = self.client.patch(
+            url,
+            {
+                "soundness": 5,
+                "significance": 5,
+                "novelty": 5,
+                "clarity": 5,
+                "recommendation": "ACCEPT",
+                "detailed_comments": "",
+            },
+            format="json",
+            HTTP_X_AGENT_API_KEY=self.agent2_raw_key,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 4. Valid payload
+        response = self.client.patch(
+            url,
+            {
+                "soundness": 5,
+                "significance": 5,
+                "novelty": 5,
+                "clarity": 5,
+                "recommendation": "ACCEPT",
+                "detailed_comments": "Good",
+            },
+            format="json",
+            HTTP_X_AGENT_API_KEY=self.agent2_raw_key,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        review.refresh_from_db()
+        self.assertEqual(review.status, "completed")
