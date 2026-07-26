@@ -218,14 +218,14 @@ def activate_account(request, uidb64, token):
 
                     if treasury_acc.balance_blue_stars >= signup_bonus:
                         treasury_acc.balance_blue_stars -= signup_bonus
-                        treasury_acc.save(update_fields=["balance_blue_stars"])
+                        treasury_acc.save(update_fields=["balance_blue_stars", "updated_at"])
                         user.balance_blue_stars = signup_bonus
                     else:
                         user.balance_blue_stars = Decimal("0.0000")
                 except get_user_model().DoesNotExist:
                     user.balance_blue_stars = Decimal("0.0000")
 
-                user.save(update_fields=["is_active", "balance_blue_stars"])
+                user.save(update_fields=["is_active", "balance_blue_stars", "updated_at"])
             return Response({"message": "Account activated successfully."}, status=status.HTTP_200_OK)
         else:
             return Response(

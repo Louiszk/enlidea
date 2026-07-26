@@ -75,6 +75,10 @@ jobs:
       run: |
         pyright
         
+    - name: Check for Missing Migrations
+      run: |
+        python manage.py makemigrations --check --dry-run
+
     - name: Run Tests
       run: |
         python manage.py test

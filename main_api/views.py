@@ -440,26 +440,45 @@ class AgentViewSet(viewsets.ModelViewSet):
             "node", "agent"
         )
 
-        # Calculate latest update timestamp
+        # Calculate latest update timestamp across all relevant agent scope (unfiltered by status)
         timestamps = []
 
-        max_directive = directives_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
+        # 1. Agent metadata / capabilities / orange stars & Maintainer balance
+        if agent.updated_at:
+            timestamps.append(agent.updated_at.timestamp())
+        if agent.maintainer and agent.maintainer.updated_at:
+            timestamps.append(agent.maintainer.updated_at.timestamp())
+
+        # 2. All directives belonging to agent/maintainer (unfiltered by pending status)
+        all_directives_qs = AgentDirective.objects.filter(
+            Q(agent=agent, maintainer=agent.maintainer) | Q(agent__isnull=True, maintainer=agent.maintainer)
+        )
+        max_directive = all_directives_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
         if max_directive:
             timestamps.append(max_directive.timestamp())
 
-        max_node = nodes_qs.aggregate(max_ts=models.Max("updated"))["max_ts"]
+        # 3. All nodes where agent is assigned, coordinator, or reviewer
+        all_nodes_qs = ResearchNode.objects.filter(
+            Q(assigned_agents=agent) | Q(coordinating_agent=agent) | Q(reviews__assigned_reviewer=agent)
+        ).distinct()
+        max_node = all_nodes_qs.aggregate(max_ts=models.Max("updated"))["max_ts"]
         if max_node:
             timestamps.append(max_node.timestamp())
 
-        max_review = reviews_qs.aggregate(max_ts=models.Max("created"))["max_ts"]
+        # 4. All peer reviews assigned to agent (using updated_at, unfiltered by status)
+        all_reviews_qs = PeerReview.objects.filter(assigned_reviewer=agent)
+        max_review = all_reviews_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
         if max_review:
             timestamps.append(max_review.timestamp())
 
-        max_bid = bids_to_evaluate_qs.aggregate(max_ts=models.Max("created_at"))["max_ts"]
+        # 5. All bids submitted by agent OR on nodes coordinated by agent
+        all_bids_qs = Bid.objects.filter(Q(node__coordinating_agent=agent) | Q(agent=agent))
+        max_bid = all_bids_qs.aggregate(max_ts=models.Max("updated_at"))["max_ts"]
         if max_bid:
             timestamps.append(max_bid.timestamp())
 
-        max_message = AgentMessage.objects.filter(node__in=nodes_qs).aggregate(max_ts=models.Max("created_at"))[
+        # 6. Messages on nodes associated with agent
+        max_message = AgentMessage.objects.filter(node__in=all_nodes_qs).aggregate(max_ts=models.Max("created_at"))[
             "max_ts"
         ]
         if max_message:
@@ -1233,11 +1252,13 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
 
             # Transfer funds
             maintainer.balance_blue_stars -= cost
-            maintainer.save(update_fields=["balance_blue_stars"])
+            maintainer.save(update_fields=["balance_blue_stars", "updated_at"])
 
             from main_api.tasks import TREASURY_USERNAME
 
-            User.objects.filter(username=TREASURY_USERNAME).update(balance_blue_stars=F("balance_blue_stars") + cost)
+            User.objects.filter(username=TREASURY_USERNAME).update(
+                balance_blue_stars=F("balance_blue_stars") + cost, updated_at=timezone.now()
+            )
 
             # Extend deadline
             node.extended_days += days
@@ -1245,7 +1266,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 node.deadline = node.deadline + timedelta(days=days)
             else:
                 node.deadline = timezone.now() + timedelta(days=days)
-            node.save(update_fields=["extended_days", "deadline"])
+            node.save(update_fields=["extended_days", "deadline", "updated"])
 
             from .tasks import task_handle_node_deadline
 
@@ -1353,7 +1374,7 @@ class PeerReviewViewSet(
 
             if action_choice == "reject":
                 review.status = "rejected"
-                review.save(update_fields=["status"])
+                review.save(update_fields=["status", "updated_at"])
 
                 # Unconditionally trigger refill to maintain over-provisioned buffer
                 if node.escalated_to_counsel:
@@ -1373,7 +1394,7 @@ class PeerReviewViewSet(
                 if claimed_or_completed_count >= required:
                     # Too late, quota filled by other agents
                     review.status = "rejected"
-                    review.save(update_fields=["status"])
+                    review.save(update_fields=["status", "updated_at"])
                     return Response(
                         {"detail": "Review quota already filled by other agents."}, status=status.HTTP_409_CONFLICT
                     )
@@ -1381,7 +1402,7 @@ class PeerReviewViewSet(
                 # Successful claim
                 review.status = "claimed"
                 review.claimed_at = timezone.now()
-                review.save(update_fields=["status", "claimed_at"])
+                review.save(update_fields=["status", "claimed_at", "updated_at"])
 
                 # Cleanup: If quota is now met by claims/completions, delete all other 'pending' for this round
                 new_count = claimed_or_completed_count + 1

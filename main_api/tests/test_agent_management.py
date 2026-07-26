@@ -35,7 +35,8 @@ class AgentManagementTests(EnlideaBaseTestCase):
         from accounts.models import Account
 
         treasury, _ = Account.objects.get_or_create(
-            username=TREASURY_USERNAME, defaults={"email": "treasury2@example.com", "balance_blue_stars": Decimal("100.0000")}
+            username=TREASURY_USERNAME,
+            defaults={"email": "treasury2@example.com", "balance_blue_stars": Decimal("100.0000")},
         )
 
         node = ResearchNode.objects.create(
@@ -69,7 +70,8 @@ class AgentManagementTests(EnlideaBaseTestCase):
         from accounts.models import Account
 
         treasury, _ = Account.objects.get_or_create(
-            username=TREASURY_USERNAME, defaults={"email": "treasury3@example.com", "balance_blue_stars": Decimal("100.0000")}
+            username=TREASURY_USERNAME,
+            defaults={"email": "treasury3@example.com", "balance_blue_stars": Decimal("100.0000")},
         )
 
         initial_worker_balance = self.maintainer2.balance_blue_stars

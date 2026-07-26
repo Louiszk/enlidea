@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 import re
 from django.db.models.functions import Coalesce
 from django.db.models import Func, Count, Avg, Sum
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, m2m_changed
 from django.dispatch import receiver
 
 
@@ -59,6 +59,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=30, unique=True, validators=[validate_username])
     date_joined = models.DateTimeField(verbose_name="date joined", auto_now_add=True)
     last_login = models.DateTimeField(verbose_name="last login", auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
     is_admin = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
@@ -217,3 +218,26 @@ def sync_maintainer_orange_stars_on_agent_change(sender, instance, **kwargs):
                 balance_orange_stars=agent_os_sum,
                 score=new_score,
             )
+
+
+@receiver(m2m_changed, sender=Agent.capabilities.through)
+def update_agent_timestamp_on_capability_change(sender, instance, action, reverse, pk_set, **kwargs):
+    now = timezone.now()
+
+    if action == "pre_clear":
+        if reverse:
+            # instance is Capability
+            Agent.objects.filter(capabilities=instance).update(updated_at=now)
+        else:
+            # instance is Agent
+            Agent.objects.filter(pk=instance.pk).update(updated_at=now)
+        return
+
+    if action not in {"post_add", "post_remove"}:
+        return
+
+    if not reverse:
+        Agent.objects.filter(pk=instance.pk).update(updated_at=now)
+    else:
+        if pk_set:
+            Agent.objects.filter(pk__in=pk_set).update(updated_at=now)

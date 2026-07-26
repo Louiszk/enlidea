@@ -404,12 +404,12 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
             continue
         # A. Base fee
         updated_rows = Account.objects.filter(username=TREASURY_USERNAME, balance_blue_stars__gte=base_fee).update(
-            balance_blue_stars=F("balance_blue_stars") - base_fee
+            balance_blue_stars=F("balance_blue_stars") - base_fee, updated_at=timezone.now()
         )
 
         if updated_rows > 0:
             Account.objects.filter(id=reviewing_agent.maintainer_id).update(
-                balance_blue_stars=F("balance_blue_stars") + base_fee
+                balance_blue_stars=F("balance_blue_stars") + base_fee, updated_at=timezone.now()
             )
 
         # B. Accuracy Bonus / Slashing
@@ -417,15 +417,15 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
             accuracy_bonus_bs = (reviewer_os_reward * Decimal("2.0")).quantize(Decimal("0.0001"))
             updated_bonus_rows = Account.objects.filter(
                 username=TREASURY_USERNAME, balance_blue_stars__gte=accuracy_bonus_bs
-            ).update(balance_blue_stars=F("balance_blue_stars") - accuracy_bonus_bs)
+            ).update(balance_blue_stars=F("balance_blue_stars") - accuracy_bonus_bs, updated_at=timezone.now())
 
             if updated_bonus_rows > 0:
                 Account.objects.filter(id=reviewing_agent.maintainer_id).update(
-                    balance_blue_stars=F("balance_blue_stars") + accuracy_bonus_bs
+                    balance_blue_stars=F("balance_blue_stars") + accuracy_bonus_bs, updated_at=timezone.now()
                 )
             locked_rev = Agent.objects.select_for_update().get(id=reviewing_agent.id)
             locked_rev.orange_stars += reviewer_os_reward
-            locked_rev.save(update_fields=["orange_stars"])
+            locked_rev.save(update_fields=["orange_stars", "updated_at"])
 
             Notification.objects.create(
                 recipient=reviewing_agent.maintainer,
@@ -439,7 +439,7 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
             locked_reviewer.orange_stars -= penalty
             if locked_reviewer.orange_stars < BAN_THRESHOLD_OS:
                 locked_reviewer.is_active = False
-            locked_reviewer.save(update_fields=["orange_stars", "is_active"])
+            locked_reviewer.save(update_fields=["orange_stars", "is_active", "updated_at"])
 
             Notification.objects.create(
                 recipient=reviewing_agent.maintainer,
@@ -472,7 +472,7 @@ def execute_publish(node):
         process_reviewer_rewards(node, node.revision_count, True)
 
         # 2. Update Node Status
-        ResearchNode.objects.filter(id=node.id).update(status="published")
+        ResearchNode.objects.filter(id=node.id).update(status="published", updated=timezone.now())
         try:
             trend, _ = Trend.objects.get_or_create(research_node=node)
             trend.update_metrics(fulfillments=1)
@@ -492,7 +492,9 @@ def execute_publish(node):
             agent_count = fulfilling_agents.count()
             tax = (node.bounty_amount * TAX_RATE).quantize(Decimal("0.0001"))
 
-            Account.objects.filter(username=TREASURY_USERNAME).update(balance_blue_stars=F("balance_blue_stars") + tax)
+            Account.objects.filter(username=TREASURY_USERNAME).update(
+                balance_blue_stars=F("balance_blue_stars") + tax, updated_at=timezone.now()
+            )
 
             # Coordinator was already refunded the forfeited_bounty instantly during execute_kick.
             # No need to refund them again here.
@@ -519,11 +521,11 @@ def execute_publish(node):
 
                 total_payout = (agent_share + stake_return).quantize(Decimal("0.0001"))
                 Account.objects.filter(id=agent.maintainer_id).update(
-                    balance_blue_stars=F("balance_blue_stars") + total_payout
+                    balance_blue_stars=F("balance_blue_stars") + total_payout, updated_at=timezone.now()
                 )
                 locked_w = Agent.objects.select_for_update().get(id=agent.id)
                 locked_w.orange_stars += worker_os_reward
-                locked_w.save(update_fields=["orange_stars"])
+                locked_w.save(update_fields=["orange_stars", "updated_at"])
 
                 Notification.objects.create(
                     recipient=agent.maintainer,
@@ -548,12 +550,12 @@ def execute_reject(node):
         process_reviewer_rewards(node, node.revision_count, False)
 
         # 2. Update Node Status
-        ResearchNode.objects.filter(id=node.id).update(status="rejected")
+        ResearchNode.objects.filter(id=node.id).update(status="rejected", updated=timezone.now())
 
     if node.coordinating_agent:
         refund_amount = max(Decimal("0"), node.bounty_amount - node.forfeited_bounty)
         Account.objects.filter(id=node.coordinating_agent.maintainer_id).update(
-            balance_blue_stars=F("balance_blue_stars") + refund_amount
+            balance_blue_stars=F("balance_blue_stars") + refund_amount, updated_at=timezone.now()
         )
         Notification.objects.create(
             recipient=node.coordinating_agent.maintainer,
@@ -573,7 +575,7 @@ def execute_reject(node):
         locked_agent.orange_stars -= penalty
         if locked_agent.orange_stars < BAN_THRESHOLD_OS:
             locked_agent.is_active = False
-        locked_agent.save(update_fields=["orange_stars", "is_active"])
+        locked_agent.save(update_fields=["orange_stars", "is_active", "updated_at"])
 
     if node.coordinating_agent and not fulfilling_agents.filter(id=node.coordinating_agent.id).exists():
         locked_coord = Agent.objects.select_for_update().get(id=node.coordinating_agent.id)
@@ -581,10 +583,10 @@ def execute_reject(node):
         locked_coord.orange_stars -= penalty
         if locked_coord.orange_stars < BAN_THRESHOLD_OS:
             locked_coord.is_active = False
-        locked_coord.save(update_fields=["orange_stars", "is_active"])
+        locked_coord.save(update_fields=["orange_stars", "is_active", "updated_at"])
 
     Account.objects.filter(username=TREASURY_USERNAME).update(
-        balance_blue_stars=F("balance_blue_stars") + total_burned_stake
+        balance_blue_stars=F("balance_blue_stars") + total_burned_stake, updated_at=timezone.now()
     )
 
 
@@ -644,7 +646,9 @@ def task_resolve_node(self, node_id):
                 node.reviews.filter(round_number=node.revision_count, status="pending").delete()
 
                 # Update status of claimed reviews to aborted to avoid UX hard-deletion flaw
-                node.reviews.filter(round_number=node.revision_count, status="claimed").update(status="aborted")
+                node.reviews.filter(round_number=node.revision_count, status="claimed").update(
+                    status="aborted", updated_at=timezone.now()
+                )
 
                 logger.info(f"Node {node.id} resolved early ({early_stop_verdict}). Aborted remaining reviews.")
 
@@ -666,7 +670,7 @@ def task_resolve_node(self, node_id):
 
             node.orchestrator_verdict = "ACCEPT" if is_approved else "REJECT"
             node.verdict_strength = strength
-            node.save(update_fields=["orchestrator_verdict", "verdict_strength"])
+            node.save(update_fields=["orchestrator_verdict", "verdict_strength", "updated"])
 
             # Finalize or Pause
             if node.escalated_to_counsel:
@@ -680,7 +684,7 @@ def task_resolve_node(self, node_id):
             else:
                 node.status = "awaiting_coordinator"
                 node.decision_deadline = timezone.now() + timedelta(days=3)
-                node.save(update_fields=["status", "decision_deadline"])
+                node.save(update_fields=["status", "decision_deadline", "updated"])
 
                 if node.coordinating_agent:
                     Notification.objects.create(
@@ -779,7 +783,7 @@ def task_handle_node_deadline(self, node_id):
                 # Failed to attract workers - refund stakes
                 for agent in assigned_agents:
                     Account.objects.filter(id=agent.maintainer.id).update(
-                        balance_blue_stars=F("balance_blue_stars") + stake_amount
+                        balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
                     )
 
                     Notification.objects.create(
@@ -790,7 +794,7 @@ def task_handle_node_deadline(self, node_id):
                     )
 
                 # Cleanup pending bids so they drop off the Coordinator's sync payload
-                node.bids.filter(status="pending").update(status="rejected")
+                node.bids.filter(status="pending").update(status="rejected", updated_at=timezone.now())
 
             elif node.status == "in_progress":
                 # Workers failed to deliver - burn stakes to Treasury and slash trust
@@ -806,7 +810,7 @@ def task_handle_node_deadline(self, node_id):
                     if locked_agent.orange_stars < BAN_THRESHOLD_OS:
                         locked_agent.is_active = False
 
-                    locked_agent.save(update_fields=["orange_stars", "is_active"])
+                    locked_agent.save(update_fields=["orange_stars", "is_active", "updated_at"])
 
                     Notification.objects.create(
                         recipient=agent.maintainer,
@@ -821,7 +825,7 @@ def task_handle_node_deadline(self, node_id):
                     locked_coord.orange_stars -= penalty
                     if locked_coord.orange_stars < BAN_THRESHOLD_OS:
                         locked_coord.is_active = False
-                    locked_coord.save(update_fields=["orange_stars", "is_active"])
+                    locked_coord.save(update_fields=["orange_stars", "is_active", "updated_at"])
                     Notification.objects.create(
                         recipient=node.coordinating_agent.maintainer,
                         notification_type="node_rejected",
@@ -831,11 +835,11 @@ def task_handle_node_deadline(self, node_id):
 
                 # Transfer total burned stake to Treasury once (Lock-free atomic update)
                 Account.objects.filter(username=TREASURY_USERNAME).update(
-                    balance_blue_stars=F("balance_blue_stars") + total_burned_stake
+                    balance_blue_stars=F("balance_blue_stars") + total_burned_stake, updated_at=timezone.now()
                 )
 
             # 3. Mark as Failed
-            ResearchNode.objects.filter(id=node.id).update(status="failed")
+            ResearchNode.objects.filter(id=node.id).update(status="failed", updated=timezone.now())
             logger.info(f"Node '{node.title}' marked as FAILED due to deadline.")
 
     except Retry:
@@ -927,9 +931,9 @@ def task_sweep_stale_reviews(self):
                         agent.orange_stars -= penalty
                         if agent.orange_stars < BAN_THRESHOLD_OS:
                             agent.is_active = False
-                            agent.save(update_fields=["orange_stars", "is_active"])
+                            agent.save(update_fields=["orange_stars", "is_active", "updated_at"])
                         else:
-                            agent.save(update_fields=["orange_stars"])
+                            agent.save(update_fields=["orange_stars", "updated_at"])
 
                         Notification.objects.create(
                             recipient=agent.maintainer,

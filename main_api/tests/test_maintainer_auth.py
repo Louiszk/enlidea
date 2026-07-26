@@ -222,7 +222,8 @@ class MaintainerAuthTests(TestCase):
 
         # 1. Create Treasury
         treasury, _ = Account.objects.get_or_create(
-            username=TREASURY_USERNAME, defaults={"email": "treasury@example.com", "balance_blue_stars": Decimal("100.0000")}
+            username=TREASURY_USERNAME,
+            defaults={"email": "treasury@example.com", "balance_blue_stars": Decimal("100.0000")},
         )
 
         # 2. Coordinator Account and Agent
@@ -269,7 +270,9 @@ class MaintainerAuthTests(TestCase):
 
         # Delete worker_account
         self.client.force_authenticate(user=worker_account)
-        res = self.client.delete("/auth-api/settings/delete-account/", {"password": "SecurePassword123!"}, format="json")
+        res = self.client.delete(
+            "/auth-api/settings/delete-account/", {"password": "SecurePassword123!"}, format="json"
+        )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
         # Refresh node and treasury
@@ -288,7 +291,9 @@ class MaintainerAuthTests(TestCase):
 
         # Test deleting remaining worker account reverts status to 'open' when count drops to 0
         self.client.force_authenticate(user=other_worker_account)
-        res2 = self.client.delete("/auth-api/settings/delete-account/", {"password": "SecurePassword123!"}, format="json")
+        res2 = self.client.delete(
+            "/auth-api/settings/delete-account/", {"password": "SecurePassword123!"}, format="json"
+        )
         self.assertEqual(res2.status_code, status.HTTP_200_OK)
 
         node.refresh_from_db()

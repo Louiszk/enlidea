@@ -394,6 +394,7 @@ class PeerReview(models.Model):
 
     round_number = models.IntegerField(default=0)
     created = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("research_node", "assigned_reviewer", "round_number")
@@ -484,6 +485,7 @@ class Bid(models.Model):
     interview_response = models.TextField(blank=True, validators=[MaxLengthValidator(2000)])
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("node", "agent")
@@ -503,7 +505,7 @@ class Attachment(models.Model):
 
 
 from django.db import transaction
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, m2m_changed, pre_delete
 from django.dispatch import receiver
 
 
@@ -538,3 +540,75 @@ class AgentNodeSync(models.Model):
 
     def __str__(self):
         return f"Sync for {self.agent.name} on {self.node.title} at {self.last_synced_at}"
+
+
+@receiver(post_delete, sender=AgentDirective)
+def update_agent_timestamp_on_directive_delete(sender, instance, **kwargs):
+    from accounts.models import Agent
+
+    if instance.agent_id:
+        Agent.objects.filter(pk=instance.agent_id).update(updated_at=timezone.now())
+    elif instance.maintainer_id:
+        Agent.objects.filter(maintainer_id=instance.maintainer_id).update(updated_at=timezone.now())
+
+
+@receiver(post_delete, sender=PeerReview)
+def update_agent_timestamp_on_review_delete(sender, instance, **kwargs):
+    from accounts.models import Agent
+
+    if instance.assigned_reviewer_id:
+        Agent.objects.filter(pk=instance.assigned_reviewer_id).update(updated_at=timezone.now())
+
+
+@receiver(post_delete, sender=Bid)
+def update_agent_timestamp_on_bid_delete(sender, instance, **kwargs):
+    from accounts.models import Agent
+
+    if instance.agent_id:
+        Agent.objects.filter(pk=instance.agent_id).update(updated_at=timezone.now())
+
+
+@receiver(m2m_changed, sender=ResearchNode.assigned_agents.through)
+def update_timestamps_on_assigned_agents_change(sender, instance, action, reverse, pk_set, **kwargs):
+    """Bumps timestamps when workers are added or removed from a node."""
+    from accounts.models import Agent
+
+    now = timezone.now()
+
+    if action == "pre_clear":
+        if reverse:
+            # instance is Agent
+            Agent.objects.filter(pk=instance.pk).update(updated_at=now)
+            ResearchNode.objects.filter(assigned_agents=instance).update(updated=now)
+        else:
+            # instance is ResearchNode
+            ResearchNode.objects.filter(pk=instance.pk).update(updated=now)
+            Agent.objects.filter(assigned_nodes=instance).update(updated_at=now)
+        return
+
+    if action not in {"post_add", "post_remove"}:
+        return
+
+    if reverse:
+        Agent.objects.filter(pk=instance.pk).update(updated_at=now)
+        if pk_set:
+            ResearchNode.objects.filter(pk__in=pk_set).update(updated=now)
+    else:
+        ResearchNode.objects.filter(pk=instance.pk).update(updated=now)
+        if pk_set:
+            Agent.objects.filter(pk__in=pk_set).update(updated_at=now)
+
+
+@receiver(pre_delete, sender=ResearchNode)
+def update_agent_timestamp_on_node_delete(sender, instance, **kwargs):
+    """Bumps timestamps for related agents before the node is deleted to invalidate their sync cache."""
+    from accounts.models import Agent
+
+    agent_ids = set()
+    if instance.coordinating_agent_id:
+        agent_ids.add(instance.coordinating_agent_id)
+
+    agent_ids.update(list(instance.assigned_agents.values_list("id", flat=True)))
+
+    if agent_ids:
+        Agent.objects.filter(id__in=agent_ids).update(updated_at=timezone.now())

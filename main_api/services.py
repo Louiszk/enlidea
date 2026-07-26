@@ -211,12 +211,12 @@ def create_research_node(agent, validated_data):
             )
 
         maintainer.balance_blue_stars -= total_cost
-        maintainer.save(update_fields=["balance_blue_stars"])
+        maintainer.save(update_fields=["balance_blue_stars", "updated_at"])
 
         from main_api.tasks import TREASURY_USERNAME
 
         updated_count = User.objects.filter(username=TREASURY_USERNAME).update(
-            balance_blue_stars=F("balance_blue_stars") + creation_fee
+            balance_blue_stars=F("balance_blue_stars") + creation_fee, updated_at=timezone.now()
         )
         if updated_count == 0:
             logger.error("Treasury account not found during node creation!")
@@ -336,7 +336,7 @@ def delete_research_node(node, user):
         if locked_instance.coordinating_agent:
             refund_amount = max(Decimal("0"), locked_instance.bounty_amount - locked_instance.forfeited_bounty)
             User.objects.filter(id=locked_instance.coordinating_agent.maintainer_id).update(
-                balance_blue_stars=F("balance_blue_stars") + refund_amount
+                balance_blue_stars=F("balance_blue_stars") + refund_amount, updated_at=timezone.now()
             )
 
         if locked_instance.assigned_agents.exists():
@@ -350,7 +350,9 @@ def delete_research_node(node, user):
                 )
 
             for m_id, amount in maintainer_refunds.items():
-                User.objects.filter(id=m_id).update(balance_blue_stars=F("balance_blue_stars") + amount)
+                User.objects.filter(id=m_id).update(
+                    balance_blue_stars=F("balance_blue_stars") + amount, updated_at=timezone.now()
+                )
 
         locked_instance.delete()
 
@@ -382,7 +384,7 @@ def submit_bid(agent, node, interview_response):
             if node.assigned_agents.count() >= node.required_collaborators:
                 node.status = "in_progress"
                 node.deadline = timezone.now() + timedelta(days=node.research_duration_days)
-                node.bids.filter(status="pending").update(status="rejected")
+                node.bids.filter(status="pending").update(status="rejected", updated_at=timezone.now())
             node.save()
 
             if node.status == "in_progress" and node.deadline:
@@ -469,7 +471,7 @@ def evaluate_bid_service(user, bid, action_choice):
             if node.assigned_agents.count() >= node.required_collaborators:
                 node.status = "in_progress"
                 node.deadline = timezone.now() + timedelta(days=node.research_duration_days)
-                node.bids.filter(status="pending").update(status="rejected")
+                node.bids.filter(status="pending").update(status="rejected", updated_at=timezone.now())
 
             node.save()
 
@@ -539,7 +541,7 @@ def finalize_research_service(agent, node, content, request_host):
 
         locked_node.body = content
         locked_node.status = "in_review"
-        locked_node.save(update_fields=["body", "status"])
+        locked_node.save(update_fields=["body", "status", "updated"])
 
         from .tasks import task_matchmake_node
 
@@ -603,7 +605,7 @@ def handle_coordinator_decision(user, node, action_choice):
             maintainer.balance_blue_stars -= REVISION_FEE
             maintainer.save()
             User.objects.filter(username=TREASURY_USERNAME).update(
-                balance_blue_stars=F("balance_blue_stars") + REVISION_FEE
+                balance_blue_stars=F("balance_blue_stars") + REVISION_FEE, updated_at=timezone.now()
             )
 
             locked_node.revision_count += 1
@@ -668,7 +670,7 @@ def handle_coordinator_decision(user, node, action_choice):
             maintainer.balance_blue_stars -= ESCALATION_FEE
             maintainer.save()
             User.objects.filter(username=TREASURY_USERNAME).update(
-                balance_blue_stars=F("balance_blue_stars") + ESCALATION_FEE
+                balance_blue_stars=F("balance_blue_stars") + ESCALATION_FEE, updated_at=timezone.now()
             )
 
             locked_node.escalated_to_counsel = True
@@ -705,7 +707,7 @@ def cleanup_agent_active_node_commitments(agent):
         for worker in node.assigned_agents.all():
             if worker.maintainer_id != agent.maintainer_id:
                 Account.objects.filter(id=worker.maintainer_id).update(
-                    balance_blue_stars=F("balance_blue_stars") + stake_amount
+                    balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
                 )
                 Notification.objects.create(
                     recipient_id=worker.maintainer_id,
@@ -714,7 +716,7 @@ def cleanup_agent_active_node_commitments(agent):
                     verb=f"Research Node '{node.title}' was aborted because coordinating agent '{agent.name}' was revoked/deleted. Stake of {stake_amount} Blue Stars refunded.",
                 )
         node.status = "failed"
-        node.save(update_fields=["status"])
+        node.save(update_fields=["status", "updated"])
 
     # 2. Handle active nodes coordinated by OTHER maintainers where this agent is a worker
     worker_active_nodes = (
@@ -731,7 +733,7 @@ def cleanup_agent_active_node_commitments(agent):
 
         # Transfer forfeited worker stake to System Treasury
         treasury_updated = Account.objects.filter(username=TREASURY_USERNAME).update(
-            balance_blue_stars=F("balance_blue_stars") + stake_amount
+            balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
         )
         if treasury_updated == 0:
             raise Exception("System Treasury account missing during worker stake settlement.")
@@ -753,7 +755,7 @@ def cleanup_agent_active_node_commitments(agent):
         if remaining_workers == 0:
             if node.status in ["in_progress", "in_review", "awaiting_coordinator"]:
                 node.status = "open"
-                node.save(update_fields=["status"])
+                node.save(update_fields=["status", "updated"])
                 if node.coordinating_agent and node.coordinating_agent.maintainer:
                     Notification.objects.create(
                         recipient=node.coordinating_agent.maintainer,
@@ -761,4 +763,3 @@ def cleanup_agent_active_node_commitments(agent):
                         research_node=node,
                         verb=f"Research Node '{node.title}' has no remaining assigned worker agents and has been reverted to 'open' status for new bidding.",
                     )
-

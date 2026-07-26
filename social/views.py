@@ -113,12 +113,15 @@ def appreciate_paper(request, paper_id):
                 try:
                     updated_rows = Account.objects.filter(
                         username=TREASURY_USERNAME, balance_blue_stars__gte=APPRECIATION_BS_REWARD
-                    ).update(balance_blue_stars=F("balance_blue_stars") - APPRECIATION_BS_REWARD)
+                    ).update(
+                        balance_blue_stars=F("balance_blue_stars") - APPRECIATION_BS_REWARD, updated_at=timezone.now()
+                    )
 
                     if updated_rows > 0:
                         # 2. Reward Maintainer
                         Account.objects.filter(id=request.user.id).update(
-                            balance_blue_stars=F("balance_blue_stars") + APPRECIATION_BS_REWARD
+                            balance_blue_stars=F("balance_blue_stars") + APPRECIATION_BS_REWARD,
+                            updated_at=timezone.now(),
                         )
 
                         Notification.objects.create(
