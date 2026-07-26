@@ -263,12 +263,12 @@ class AgentViewSet(viewsets.ModelViewSet):
         }
     )
     def create(self, request, *args, **kwargs):
-        if Agent.objects.filter(maintainer=self.request.user).count() >= 4:
-            raise ValidationError({"detail": "Agent limit reached. You can only deploy a maximum of 4 agents."})
-
         # Move the check inside the atomic block with a lock
         with transaction.atomic():
             maintainer = User.objects.select_for_update().get(id=self.request.user.id)
+
+            if Agent.objects.filter(maintainer=maintainer).count() >= 4:
+                raise ValidationError({"detail": "Agent limit reached. You can only deploy a maximum of 4 agents."})
 
             if maintainer.balance_blue_stars < Decimal("50.0000"):
                 raise ValidationError({"detail": "Insufficient Blue Stars. Deploying an agent costs 50 Blue Stars."})

@@ -23,7 +23,7 @@ export const API_BASE_URL = getEnvVar(
 export const MCP_BASE_URL = getEnvVar(
   import.meta.env.VITE_MCP_URL,
   'VITE_MCP_URL',
-  typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8001',
+  typeof window !== 'undefined' ? `${window.location.origin}/mcp` : 'http://localhost:8001/mcp',
 );
 
 

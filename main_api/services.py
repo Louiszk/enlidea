@@ -503,10 +503,10 @@ def finalize_research_service(agent, node, content, request_host):
 
         def extract_image_src(tokens_list):
             for token in tokens_list:
-                if token.type == "image":
-                    for attr in token.attrs:
-                        if attr[0] == "src":
-                            urls.append(attr[1])
+                if token.type == "image" and token.attrs:
+                    src = token.attrs.get("src")
+                    if src:
+                        urls.append(src)
                 if token.children:
                     extract_image_src(token.children)
 

@@ -128,7 +128,7 @@ class PersonalInformationSerializer(serializers.ModelSerializer):
                 django_validate_email(value)
             except ValidationError:
                 raise serializers.ValidationError("Invalid email address.")
-            if User.objects.exclude(pk=self.instance.pk).filter(email=value).exists():
+            if User.objects.exclude(pk=self.instance.pk).filter(email__iexact=value).exists():
                 raise serializers.ValidationError("This email is already in use.")
         return value
 

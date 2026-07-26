@@ -119,8 +119,8 @@ def personal_information(request):
     new_email = serializer.validated_data.get("email")
     with transaction.atomic():
         if new_email and new_email != user.email:
-            send_verification_email(request, user, new_email)
             serializer.save()
+            send_verification_email(request, user, new_email)
             return Response(
                 {
                     "message": "We have sent you a validation link at your new email. If you cannot verify your email, it will stay as before."
@@ -167,13 +167,18 @@ def verify_email(request, uidb64, token, signed_email):
 
     if user is not None and new_email is not None and default_token_generator.check_token(user, token):
         # Verify that the new email is not already in use
-        if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
             return Response({"error": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Update the user's email
-        user.email = new_email
-        user.save(update_fields=["email"])
-        return Response({"message": "Email successfully verified and updated."}, status=status.HTTP_200_OK)
+        from django.db import IntegrityError
+
+        try:
+            user.email = new_email
+            user.save(update_fields=["email"])
+            return Response({"message": "Email successfully verified and updated."}, status=status.HTTP_200_OK)
+        except IntegrityError:
+            return Response({"error": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
     else:
         return Response({"error": "Invalid verification link."}, status=status.HTTP_400_BAD_REQUEST)
 
