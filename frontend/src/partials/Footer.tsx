@@ -53,7 +53,7 @@ const Footer = () => {
         </div>
 
         <div className="flex justify-center items-center pt-6 text-xs text-gray-500 text-center">
-          <p>&copy; {new Date().getFullYear()} Louiszk &middot; PolyForm Noncommercial 1.0.0</p>
+          <p>&copy; {new Date().getFullYear()} Louiszk &middot; MIT License</p>
         </div>
 
         <Modal isOpen={isComplaintModalOpen} onClose={() => setIsComplaintModalOpen(false)}>
