@@ -15,12 +15,16 @@ Including another URLconf
 """
 
 from django.conf.urls.static import static
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from main_api.health_views import healthz_view, readyz_view
 
 
 urlpatterns = [
+    # Health and Readiness Probes
+    re_path(r"^healthz/?$", healthz_view, name="healthz"),
+    re_path(r"^readyz/?$", readyz_view, name="readyz"),
     # Schema
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     # Optional UI:

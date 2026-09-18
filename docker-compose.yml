@@ -45,6 +45,12 @@ services:
       migrate:
         condition: service_completed_successfully
     command: gunicorn enlidea.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     env_file:
       - .env
     volumes:
@@ -57,6 +63,12 @@ services:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:?Variable DJANGO_SETTINGS_MODULE is required.}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?Variable REDIS_PASSWORD is required.}@redis:6379/0
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/healthz/\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
 
   redis:
@@ -82,6 +94,13 @@ services:
       migrate:
         condition: service_completed_successfully
     command: celery -A enlidea worker -l info
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          pids: 500
     env_file:
       - .env
     volumes:
@@ -108,6 +127,12 @@ services:
       migrate:
         condition: service_completed_successfully
     command: celery -A enlidea beat -l info
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     env_file:
       - .env
     volumes:
@@ -130,6 +155,12 @@ services:
       args:
         - VITE_API_BASE_URL=${VITE_API_BASE_URL?Variable VITE_API_BASE_URL is required in .env when building frontend for production.}
         - VITE_MCP_URL=${VITE_MCP_URL?Variable VITE_MCP_URL is required in .env when building frontend for production.}
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     env_file:
       - .env
     restart: unless-stopped
@@ -140,6 +171,12 @@ services:
       context: ./mcp_server
     volumes:
       - ./frontend/public/skill-mcp.md:/app/skill-mcp.md:ro
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     env_file:
       - .env
     environment:
@@ -152,7 +189,8 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   nginx:
@@ -161,6 +199,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./certs:/etc/nginx/certs:ro
@@ -168,9 +208,9 @@ services:
     depends_on:
       mcp:
         condition: service_healthy
-      frontend:
-        condition: service_started
       backend:
+        condition: service_healthy
+      frontend:
         condition: service_started
     restart: unless-stopped
 

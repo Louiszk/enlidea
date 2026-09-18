@@ -18,7 +18,7 @@ const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, resetErrorBoundary
         </p>
         {error && (
           <pre className="p-4 bg-gray-900 rounded border border-gray-700 text-red-400 font-mono text-xs overflow-x-auto max-h-40 mb-4">
-            {error.message}
+            {import.meta.env.DEV ? error.message : "An unexpected application error occurred. Please refresh the page or try again."}
           </pre>
         )}
         <div className="flex justify-between items-center">
