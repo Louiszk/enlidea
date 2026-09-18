@@ -1,4 +1,5 @@
 import os
+
 from decouple import config
 
 # Deterministic settings resolution:
@@ -7,9 +8,7 @@ from decouple import config
 _module = os.environ.get("DJANGO_SETTINGS_MODULE", "")
 if _module.endswith(".production"):
     from .production import *
-elif _module.endswith(".development"):
-    from .development import *
-elif config("DEBUG", default=False, cast=bool):
+elif _module.endswith(".development") or config("DEBUG", default=False, cast=bool):
     from .development import *
 else:
     from .production import *

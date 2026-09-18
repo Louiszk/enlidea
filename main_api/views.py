@@ -1,76 +1,95 @@
-from typing import cast, Any
-from rest_framework import viewsets, status, permissions, mixins, authentication, throttling
-from accounts.authentication import CookieJWTAuthentication
-from rest_framework.decorators import action, api_view, permission_classes, throttle_classes, authentication_classes
-from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
-from django.db import transaction, models, IntegrityError
-from django.db.models import Q, F, Count, Avg
-from django.utils import timezone
-from datetime import datetime, timedelta, timezone as dt_timezone
-from .models import (
-    Capability,
-    ResearchNode,
-    PeerReview,
-    TrendingCache,
-    Trend,
-    NodeType,
-    ResearchKeyword,
-    Paper,
-    AgentDirective,
-    Bid,
-    Attachment,
-    AgentMessage,
-)
-from accounts.models import Agent
-import logging
 import hashlib
-import uuid
+import json
+import logging
 import secrets
 import string
+import uuid
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
+from decimal import Decimal
+from typing import Any, cast
+from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, models, transaction
+from django.db.models import Avg, Count, F, Prefetch, Q
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view, inline_serializer
+from rest_framework import authentication, mixins, permissions, serializers, status, throttling, viewsets
+from rest_framework.decorators import action, api_view, authentication_classes, permission_classes, throttle_classes
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
+
+from accounts.authentication import CookieJWTAuthentication
+from accounts.models import Account, Agent
+
+from .authentication import AgentApiKeyAuthentication
+from .management.commands.helpers.trending_service import update_trending_cache
+from .models import (
+    AgentDirective,
+    AgentMessage,
+    AgentNodeSync,
+    Attachment,
+    Bid,
+    Capability,
+    NodeType,
+    Paper,
+    PeerReview,
+    ProfaneWord,
+    ResearchKeyword,
+    ResearchNode,
+    Trend,
+    TrendingCache,
+)
+from .permissions import IsAgent, IsMaintainer, IsNotPublicAgent
+from .sanitization import sanitize_agent_input
 from .serializer import (
-    CapabilitySerializer,
-    ResearchNodeSerializer,
-    ResearchNodeCardSerializer,
-    PeerReviewSerializer,
+    AgentDirectiveSerializer,
+    AgentMessageSerializer,
     AgentSerializer,
-    UserSerializer,
-    UserSearchSerializer,
+    AgentSyncNodeSerializer,
+    BidSerializer,
+    CapabilitySearchSerializer,
+    CapabilitySerializer,
     CreateResearchNodeSerializer,
     EditResearchNodeSerializer,
-    ResearchNodeBodySerializer,
-    ResearchKeywordSerializer,
-    PaperSerializer,
-    AgentDirectiveSerializer,
     NodeTypeSerializer,
-    BidSerializer,
-    AgentSyncNodeSerializer,
-    AgentMessageSerializer,
+    PaperSerializer,
+    PeerReviewSerializer,
+    PeerReviewSubmissionSerializer,
+    ResearchKeywordSerializer,
+    ResearchNodeBodySerializer,
+    ResearchNodeCardSerializer,
     ResearchNodePlanSerializer,
-    CapabilitySearchSerializer,
+    ResearchNodeSerializer,
+    UserSearchSerializer,
+    UserSerializer,
 )
-from .authentication import AgentApiKeyAuthentication
-from .throttling import PublicKeyRateThrottle
-from .permissions import IsAgent, IsMaintainer, IsNotPublicAgent
 from .services import (
-    download_remote_file,
+    cleanup_agent_active_node_commitments,
     create_research_node,
-    update_research_node,
     delete_research_node,
-    submit_bid,
+    download_remote_file,
     evaluate_bid_service,
     finalize_research_service,
     handle_coordinator_decision,
+    process_and_validate_attachment_image,
+    submit_bid,
+    update_research_node,
 )
-from django.contrib.auth import get_user_model
-from rest_framework.exceptions import ValidationError, PermissionDenied
-import json
-from decimal import Decimal
-from rest_framework.pagination import PageNumberPagination
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
-from rest_framework import serializers
+from .tasks import (
+    TREASURY_USERNAME,
+    task_handle_node_deadline,
+    task_matchmake_counsel,
+    task_matchmake_node,
+    task_resolve_node,
+)
+from .throttling import PublicKeyRateThrottle
+
+logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class CategoryPathSerializer(serializers.Serializer):
@@ -158,13 +177,6 @@ class SearchResultItemSerializer(serializers.Serializer):
     type = serializers.CharField()  # "users", "capabilities", "nodes", "papers"
     results = serializers.ListField(child=serializers.DictField())
     hasNext = serializers.BooleanField(required=False)
-
-
-from decimal import Decimal
-
-User = get_user_model()
-
-from rest_framework.pagination import PageNumberPagination
 
 
 class ResearchNodePagination(PageNumberPagination):
@@ -284,16 +296,13 @@ class AgentViewSet(viewsets.ModelViewSet):
             maintainer.save()
 
             # Transfer fee to System Treasury
-            from main_api.tasks import TREASURY_USERNAME
-            from accounts.models import Account
-
             updated_count = Account.objects.filter(username=TREASURY_USERNAME).update(
                 balance_blue_stars=F("balance_blue_stars") + Decimal("50.0000")
             )
             if updated_count == 0:
                 logger.error("Treasury account not found during agent deployment!")
                 raise ValidationError({"detail": "System Treasury account does not exist. Transaction aborted."})
-            agent = serializer.save(maintainer=maintainer, api_key_hash=hashed_key)
+            serializer.save(maintainer=maintainer, api_key_hash=hashed_key)
 
         # Return the original agent data plus the raw API key
         data = serializer.data
@@ -321,8 +330,6 @@ class AgentViewSet(viewsets.ModelViewSet):
         return Response({"api_key": raw_key})
 
     def perform_destroy(self, instance):
-        from .services import cleanup_agent_active_node_commitments
-
         with transaction.atomic():
             cleanup_agent_active_node_commitments(instance)
             instance.delete()
@@ -340,8 +347,6 @@ class AgentViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
-        from .services import cleanup_agent_active_node_commitments
-
         with transaction.atomic():
             agent = self.get_object()
             cleanup_agent_active_node_commitments(agent)
@@ -429,8 +434,6 @@ class AgentViewSet(viewsets.ModelViewSet):
             .prefetch_related("required_capabilities", "keywords", "assigned_agents")
             .distinct()
         )
-
-        from django.db.models import Prefetch
 
         reviews_qs = PeerReview.objects.filter(
             assigned_reviewer=agent, status__in=["pending", "claimed"]
@@ -529,9 +532,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
             "plan",
             "coordinator_decision",
             "extend_deadline",
-        ]:
-            self.throttle_scope = "agent_action"
-        elif (
+        ] or (
             self.action == "messages"
             and self.request
             and isinstance(self.request.method, str)
@@ -547,8 +548,8 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         try:
             trend, _ = Trend.objects.get_or_create(research_node=instance)
             trend.update_metrics(visits=1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to record visit trend metric for node %s: %s", instance.id, e)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
@@ -782,8 +783,6 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 # We sync to the created_at of the LATEST message in the node (from others).
                 latest_msg = node.messages.exclude(sender=actor).order_by("-created_at").first()
                 if latest_msg:
-                    from .models import AgentNodeSync
-
                     sync_record, created = AgentNodeSync.objects.get_or_create(
                         agent=actor, node=node, defaults={"last_synced_at": latest_msg.created_at}
                     )
@@ -803,8 +802,6 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                     raise PermissionDenied(f"Workspace is locked. Node is currently in {node.status} state.")
 
                 if isinstance(actor, Agent):
-                    from .models import AgentNodeSync
-
                     sync_record = AgentNodeSync.objects.filter(agent=actor, node=node).first()
 
                     unread_query = node.messages.exclude(sender=actor)
@@ -1054,8 +1051,6 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         file_obj = request.FILES.get("file")
 
         if file_url:
-            from .services import download_remote_file
-
             try:
                 # 2MB Limit for attachments, Allowed extensions: png, jpg, jpeg, gif, webp
                 file_obj = download_remote_file(
@@ -1070,8 +1065,6 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
             return Response({"detail": "No file or file_url provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate, decode with Pillow, re-encode, and generate a safe filename for both direct and remote uploads
-        from .services import process_and_validate_attachment_image
-
         try:
             validated_file = process_and_validate_attachment_image(file_obj, max_size_bytes=2 * 1024 * 1024)
             attachment = Attachment.objects.create(node=node, file=validated_file, uploaded_by=agent)
@@ -1081,12 +1074,10 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as e:
-            logger.error(f"Image upload failed: {str(e)}")
+            logger.error(f"Image upload failed: {e!s}")
             return Response(
                 {"detail": "Invalid image file format or corrupted data."}, status=status.HTTP_400_BAD_REQUEST
             )
-
-        from urllib.parse import urlparse
 
         return Response(
             {"id": attachment.id, "url": urlparse(attachment.file.url).path}, status=status.HTTP_201_CREATED
@@ -1254,8 +1245,6 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
             maintainer.balance_blue_stars -= cost
             maintainer.save(update_fields=["balance_blue_stars", "updated_at"])
 
-            from main_api.tasks import TREASURY_USERNAME
-
             User.objects.filter(username=TREASURY_USERNAME).update(
                 balance_blue_stars=F("balance_blue_stars") + cost, updated_at=timezone.now()
             )
@@ -1268,8 +1257,6 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
                 node.deadline = timezone.now() + timedelta(days=days)
             node.save(update_fields=["extended_days", "deadline", "updated"])
 
-            from .tasks import task_handle_node_deadline
-
             # Replace/spawn deadline task. The old one will wake up, see the new deadline, and automatically delay itself to the new ETA.
             transaction.on_commit(
                 lambda n_id=node.id, n_eta=node.deadline: (
@@ -1280,8 +1267,6 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
             )
 
             # Audit trail
-            from .models import AgentMessage
-
             AgentMessage.objects.create(
                 node=node,
                 sender=None,
@@ -1299,8 +1284,6 @@ class PeerReviewViewSet(
 
     def get_serializer_class(self):
         if self.action in ["update", "partial_update"]:
-            from .serializer import PeerReviewSubmissionSerializer
-
             return PeerReviewSubmissionSerializer
         return PeerReviewSerializer
 
@@ -1370,8 +1353,6 @@ class PeerReviewViewSet(
                     status=status.HTTP_409_CONFLICT,
                 )
 
-            from .tasks import task_matchmake_node, task_matchmake_counsel
-
             if action_choice == "reject":
                 review.status = "rejected"
                 review.save(update_fields=["status", "updated_at"])
@@ -1419,11 +1400,9 @@ class PeerReviewViewSet(
         data = serializer.validated_data
 
         # Wrap the save in an atomic block so on_commit works correctly
-        from django.db import transaction
-        from .tasks import task_resolve_node
-
         with transaction.atomic():
             # 1. Lock the specific review
+
             assert serializer.instance is not None
             locked_instance = PeerReview.objects.select_for_update().get(id=serializer.instance.id)
 
@@ -1541,8 +1520,6 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def get_queryset(self):
-        from .models import AgentDirective
-
         # Maintainers only see what they issued
         return AgentDirective.objects.filter(maintainer=self.request.user)
 
@@ -1577,8 +1554,6 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
     )
     @throttle_classes([throttling.ScopedRateThrottle])
     def agent_sync(self, request):
-        from .models import AgentDirective
-
         agent = request.user
 
         # Only update the DB if it's been more than 12 hours since the last ping
@@ -1619,14 +1594,11 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
                 agent_response = request.data.get("agent_response")
                 if agent_response is not None:
                     # Sanitize (loose mode)
-                    from .sanitization import sanitize_agent_input
-
                     sanitized_response = sanitize_agent_input(agent_response, apply_nfkc=False)
 
                     # Profanity Check
-                    from .models import ProfaneWord
-
                     profane_words = ProfaneWord.objects.values_list("word", flat=True)
+
                     for word in profane_words:
                         if word.lower() in sanitized_response.lower():
                             return Response(
@@ -1716,8 +1688,6 @@ def request_public_key(request):
 def get_trending(request):
     cache = TrendingCache.objects.first()
     if not cache or not cache.data:
-        from .management.commands.helpers.trending_service import update_trending_cache
-
         update_trending_cache()
         cache = TrendingCache.objects.first()
 
@@ -1817,8 +1787,6 @@ def search_results(request):
     if not query or len(query) < 3:
         return Response([])
 
-    from main_api.tasks import TREASURY_USERNAME
-
     # 1. Maintainers (Accounts)
     users = (
         User.objects.filter(username__icontains=query)
@@ -1875,8 +1843,6 @@ def search_results(request):
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
 def user_profile(request, user_id):
-    from main_api.tasks import TREASURY_USERNAME
-
     user = get_object_or_404(User, id=user_id)
 
     # Hide Treasury and Public Pool Profiles

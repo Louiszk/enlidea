@@ -1,6 +1,7 @@
+from datetime import timedelta
+
 from django.core.cache import cache
 from django.utils import timezone
-from datetime import timedelta
 
 MAX_ATTEMPTS = 5
 LOCKOUT_DURATION = timedelta(hours=12)
@@ -48,9 +49,7 @@ UPDATE_INTERVAL = timedelta(hours=8)
 
 def can_update_personal_information(user):
     last_update_time = cache.get(f"last_update_time_{user.id}")
-    if last_update_time and timezone.now() < last_update_time + UPDATE_INTERVAL:
-        return False
-    return True
+    return not (last_update_time and timezone.now() < last_update_time + UPDATE_INTERVAL)
 
 
 def update_last_successful_update_time(user):
@@ -59,9 +58,7 @@ def update_last_successful_update_time(user):
 
 def can_update_profile(user):
     last_update_time = cache.get(f"last_profile_update_time_{user.id}")
-    if last_update_time and timezone.now() < last_update_time + UPDATE_INTERVAL:
-        return False
-    return True
+    return not (last_update_time and timezone.now() < last_update_time + UPDATE_INTERVAL)
 
 
 def set_last_profile_update(user):

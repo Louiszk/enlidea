@@ -1,19 +1,26 @@
-from typing import cast, Any
-from .test_agent_auth import EnlideaBaseTestCase
-from accounts.models import Agent
+import hashlib
 from decimal import Decimal
+from typing import Any, cast
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
-from main_api.models import ResearchNode
-from main_api.models import PeerReview
-from main_api.tasks import task_resolve_node, task_handle_node_deadline
-from main_api.services import create_research_node
-from main_api.tests.test_agent_auth import EnlideaBaseTestCase
-from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework import status
-import hashlib
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
+from accounts.models import Agent
+from main_api.models import NodeType, PeerReview, ResearchNode
+from main_api.services import create_research_node
+from main_api.tasks import (
+    TREASURY_USERNAME,
+    execute_publish,
+    task_handle_node_deadline,
+    task_matchmake_node,
+    task_resolve_node,
+)
+
+from .test_agent_auth import EnlideaBaseTestCase
 
 User = get_user_model()
 
@@ -55,7 +62,7 @@ class TokenomicsTests(EnlideaBaseTestCase):
         eval_url_template = reverse("bid-evaluate", kwargs={"pk": 0})
 
         initial_balance = self.maintainer1.balance_blue_stars
-        stake_amount = (Decimal("500") * Decimal("0.10")).quantize(Decimal("0.0001"))
+        stake_amount = (Decimal(500) * Decimal("0.10")).quantize(Decimal("0.0001"))
 
         # Bid first
         response = self.client.post(bid_url, {"interview_response": "test"}, HTTP_X_AGENT_API_KEY=self.agent1_raw_key)
@@ -86,9 +93,6 @@ class TokenomicsTests(EnlideaBaseTestCase):
         self.assertIn("Insufficient Blue Stars to cover potential stake", cast(Any, response.data)["detail"])
 
     def test_proportional_bounty_split(self):
-        from unittest.mock import patch
-        from main_api.tasks import execute_publish
-
         # Create a node with 2 collaborators
         node = self.create_node(self.agent1, bounty=1000, collaborators=2)
 
@@ -131,14 +135,12 @@ class TokenomicsTests(EnlideaBaseTestCase):
         self.maintainer1.refresh_from_db()
         self.maintainer2.refresh_from_db()
 
-        stake_return = Decimal("1000") * Decimal("0.10")
+        stake_return = Decimal(1000) * Decimal("0.10")
 
         self.assertEqual(self.maintainer1.balance_blue_stars, b1 + Decimal("441.0") + stake_return + Decimal("31.5552"))
         self.assertEqual(self.maintainer2.balance_blue_stars, b2 + Decimal("539.0") + stake_return)
 
     def test_reviewer_slashing(self):
-        from unittest.mock import patch
-
         node = self.create_node(self.agent1, bounty=100)
         node.status = "in_review"
         node.save()
@@ -176,8 +178,6 @@ class TokenomicsTests(EnlideaBaseTestCase):
 
         node.refresh_from_db()
         self.assertEqual(node.status, "awaiting_coordinator")
-        from main_api.tasks import execute_publish
-
         execute_publish(node)
 
         # Reviewer 3 should be slashed (Reviewer 2 in index)
@@ -234,8 +234,6 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
     def setUp(self):
         super().setUp()
         # Ensure Treasury exists
-        from main_api.tasks import TREASURY_USERNAME
-
         self.treasury, _ = User.objects.get_or_create(
             username=TREASURY_USERNAME,
             defaults={"email": "treasury@enlidea.system", "balance_blue_stars": Decimal("10000.0000")},
@@ -245,16 +243,16 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
         self.neg_agent = Agent.objects.create(
             name="NegativeAgent",
             maintainer=self.maintainer2,
-            api_key_hash=hashlib.sha256("neg_hash".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"neg_hash").hexdigest(),
             orange_stars=Decimal("-10.0000"),
         )
         self.neg_agent.capabilities.add(self.cap_python)
 
         # Setup agent keys properly for HTTP headers
-        self.agent2.api_key_hash = hashlib.sha256("agent2_key".encode()).hexdigest()
+        self.agent2.api_key_hash = hashlib.sha256(b"agent2_key").hexdigest()
         self.agent2.save()
 
-        self.agent1.api_key_hash = hashlib.sha256("agent1_key".encode()).hexdigest()
+        self.agent1.api_key_hash = hashlib.sha256(b"agent1_key").hexdigest()
         self.agent1.save()
 
         self.maintainer2.balance_blue_stars = Decimal("1000.0000")
@@ -445,9 +443,6 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
 
     def test_reviewer_trust_requirement(self):
         """Test that task_matchmake_node enforces trust floor for reviewers on paid nodes."""
-        from main_api.tasks import task_matchmake_node
-        from main_api.models import PeerReview
-
         # Paid node with 5.0 min_trust
         node_paid = ResearchNode.objects.create(
             title="Paid Node for Reviewer Trust",
@@ -480,10 +475,6 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
 
     def test_trust_weighted_voting_consensus(self):
         """Test the trust-weighted voting formula."""
-        from unittest.mock import patch
-        from main_api.tasks import task_resolve_node, execute_publish
-        from main_api.models import PeerReview
-
         # Node requires 2 reviews (Even number to test tie-breaking/weighted gap)
         node = ResearchNode.objects.create(
             title="Weighted Voting Test",
@@ -560,8 +551,6 @@ class AdvancedTokenomicsTests(EnlideaBaseTestCase):
 
     def test_node_creation_without_treasury_fails(self):
         User.objects.filter(username="System_Treasury").delete()
-        from main_api.models import NodeType
-
         nt, _ = NodeType.objects.get_or_create(name="Research Node")
 
         self.maintainer1.balance_blue_stars = Decimal("150.0000")

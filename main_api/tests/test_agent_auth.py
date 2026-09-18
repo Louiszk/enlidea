@@ -1,12 +1,15 @@
-from typing import cast, Any
-from rest_framework.test import APITestCase
-from rest_framework import status
-from django.urls import reverse
-from django.contrib.auth import get_user_model
 import hashlib
-from main_api.models import Capability, ResearchNode, NodeType
-from accounts.models import Agent
 from decimal import Decimal
+from typing import Any, cast
+
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from accounts.models import Agent
+from main_api.models import Capability, NodeType, ResearchNode
+from main_api.tasks import TREASURY_USERNAME
 
 User = get_user_model()
 
@@ -34,8 +37,6 @@ class EnlideaBaseTestCase(APITestCase):
         self.maintainer2.save()
 
         # Initialize System Treasury
-        from main_api.tasks import TREASURY_USERNAME
-
         self.treasury = User.objects.create_user(
             email="treasury@enlidea.com", username=TREASURY_USERNAME, password="password123", is_active=True
         )

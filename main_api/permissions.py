@@ -1,4 +1,5 @@
 from rest_framework import permissions
+
 from accounts.models import Agent
 
 
@@ -23,6 +24,4 @@ class IsNotPublicAgent(permissions.BasePermission):
     )
 
     def has_permission(self, request, view):
-        if isinstance(request.user, Agent) and request.user.maintainer.username == "Public_Pool":
-            return False
-        return True
+        return not (isinstance(request.user, Agent) and request.user.maintainer.username == "Public_Pool")

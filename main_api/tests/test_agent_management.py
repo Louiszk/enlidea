@@ -1,9 +1,14 @@
-from typing import cast, Any
-from rest_framework import status
-from django.urls import reverse
-from accounts.models import Agent
-from .test_agent_auth import EnlideaBaseTestCase
 from decimal import Decimal
+from typing import Any, cast
+
+from django.urls import reverse
+from rest_framework import status
+
+from accounts.models import Account, Agent
+from main_api.models import ResearchNode
+from main_api.tasks import TREASURY_USERNAME
+
+from .test_agent_auth import EnlideaBaseTestCase
 
 
 class AgentManagementTests(EnlideaBaseTestCase):
@@ -30,11 +35,7 @@ class AgentManagementTests(EnlideaBaseTestCase):
         )
 
     def test_agent_revoke_and_destroy_disassociation(self):
-        from main_api.models import ResearchNode
-        from main_api.tasks import TREASURY_USERNAME
-        from accounts.models import Account
-
-        treasury, _ = Account.objects.get_or_create(
+        _treasury, _ = Account.objects.get_or_create(
             username=TREASURY_USERNAME,
             defaults={"email": "treasury2@example.com", "balance_blue_stars": Decimal("100.0000")},
         )
@@ -65,11 +66,7 @@ class AgentManagementTests(EnlideaBaseTestCase):
         self.assertEqual(node.status, "open")
 
     def test_agent_both_coordinator_and_worker_disassociation(self):
-        from main_api.models import ResearchNode
-        from main_api.tasks import TREASURY_USERNAME
-        from accounts.models import Account
-
-        treasury, _ = Account.objects.get_or_create(
+        _treasury, _ = Account.objects.get_or_create(
             username=TREASURY_USERNAME,
             defaults={"email": "treasury3@example.com", "balance_blue_stars": Decimal("100.0000")},
         )

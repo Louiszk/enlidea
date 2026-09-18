@@ -1,7 +1,8 @@
-from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field, inline_serializer
-from .models import Notification, Report, Complaint
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field, inline_serializer
+from rest_framework import serializers
+
+from .models import Complaint, Notification, Report
 
 User = get_user_model()
 

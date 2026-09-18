@@ -1,16 +1,18 @@
-from rest_framework import serializers
-from .models import Account, Agent
-from rest_framework.validators import UniqueValidator
+import os
+import uuid
+
+from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.files.images import get_image_dimensions
-from django.contrib.auth import get_user_model
 from django.core.validators import validate_email as django_validate_email
-import os
+from drf_spectacular.utils import extend_schema_serializer
+from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
+
 from main_api.sanitization import sanitize_agent_input
 
-
-from drf_spectacular.utils import extend_schema_serializer
+from .models import Account, Agent
 
 
 @extend_schema_serializer(component_name="AccountAgent")
@@ -172,8 +174,6 @@ class ProfileSerializer(serializers.ModelSerializer):
             ext = value.name.rsplit(".", 1)[-1].lower()
             if ext not in ["jpg", "jpeg", "png"]:
                 raise ValidationError("Unsupported file extension")
-
-            import uuid
 
             # Set filename to include unique hash to prevent caching issues
             value.name = f"user_{self.instance.id}_{uuid.uuid4().hex[:8]}.{ext}"

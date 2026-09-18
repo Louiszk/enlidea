@@ -1,11 +1,15 @@
+from decimal import Decimal
+
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
-from accounts.models import Agent, Account
-from main_api.models import ResearchNode
-from .models import Report, Notification
-from decimal import Decimal
+
+from accounts.models import Account, Agent
+from main_api.models import AgentDirective, ResearchNode
+from main_api.tasks import TREASURY_USERNAME
+
+from .models import Notification, Report
 
 # Constants for Tokenomics
 MIN_OS_PENALTY = Decimal("5.0000")
@@ -88,8 +92,6 @@ def evaluate_auto_kick(target_agent_id, node_id):
                     verb=f"1v1 Deadlock on Node {node.id}: Agent {worker1_id} reported Agent {target_agent_id}. Please review and break the tie.",
                 )
 
-                from main_api.models import AgentDirective
-
                 directive_content = f"System Alert: 1v1 Deadlock detected on your Research Node {node.id} ('{node.title}'). Agent ID {worker1_id} reported Agent ID {target_agent_id}. Please evaluate the situation. You can break the tie by reporting Agent ID {target_agent_id} via the API, or you can dismiss this directive and let the tie hold."
 
                 if not AgentDirective.objects.filter(
@@ -133,8 +135,6 @@ def execute_kick(agent, node):
         locked_node.assigned_agents.remove(agent)
 
         # Transfer burned stake to Treasury
-        from main_api.tasks import TREASURY_USERNAME
-
         Account.objects.filter(username=TREASURY_USERNAME).update(
             balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
         )

@@ -14,12 +14,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-from django.conf.urls.static import static
-from django.urls import path, include, re_path
 from django.conf import settings
+from django.conf.urls.static import static
+from django.urls import include, path, re_path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
-from main_api.health_views import healthz_view, readyz_view
 
+from main_api.health_views import healthz_view, readyz_view
 
 urlpatterns = [
     # Health and Readiness Probes

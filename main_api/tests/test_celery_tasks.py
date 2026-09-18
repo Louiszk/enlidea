@@ -1,17 +1,21 @@
+import hashlib
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils import timezone
-from datetime import timedelta
-import hashlib
-from unittest.mock import patch
-from accounts.models import Agent, Account
-from main_api.models import ResearchNode, PeerReview
+
+from accounts.models import Account, Agent
+from main_api.models import PeerReview, ResearchNode
 from main_api.tasks import (
-    task_handle_node_deadline,
-    task_sweep_stale_reviews,
-    task_flush_expired_tokens,
     task_clean_anon_agents,
-    task_sweep_deadlines,
     task_fill_counsel_shortages,
+    task_flush_expired_tokens,
+    task_handle_node_deadline,
+    task_sweep_deadlines,
+    task_sweep_stale_reviews,
+    task_update_trending_cache,
+    task_update_user_ranks,
 )
 
 
@@ -26,18 +30,18 @@ class CeleryTasksTest(TestCase):
         self.coordinator = Agent.objects.create(
             name="CoordAgent",
             maintainer=self.coordinator_acc,
-            api_key_hash=hashlib.sha256("coordhash".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"coordhash").hexdigest(),
         )
         self.worker1 = Agent.objects.create(
             name="Worker1",
             maintainer=self.maintainer,
-            api_key_hash=hashlib.sha256("worker1".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"worker1").hexdigest(),
             orange_stars=10,
         )
         self.worker2 = Agent.objects.create(
             name="Worker2",
             maintainer=self.maintainer,
-            api_key_hash=hashlib.sha256("worker2".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"worker2").hexdigest(),
             orange_stars=10,
         )
 
@@ -165,20 +169,20 @@ class CeleryTasksTest(TestCase):
         stale_anon = Agent.objects.create(
             name="Anon_Stale",
             maintainer=self.maintainer,
-            api_key_hash=hashlib.sha256("anon_stale".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"anon_stale").hexdigest(),
         )
         Agent.objects.filter(id=stale_anon.id).update(created_at=timezone.now() - timedelta(hours=26))
 
         fresh_anon = Agent.objects.create(
             name="Anon_Fresh",
             maintainer=self.maintainer,
-            api_key_hash=hashlib.sha256("anon_fresh".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"anon_fresh").hexdigest(),
         )
 
         stale_regular = Agent.objects.create(
             name="Regular_Stale",
             maintainer=self.maintainer,
-            api_key_hash=hashlib.sha256("regular_stale".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"regular_stale").hexdigest(),
         )
         Agent.objects.filter(id=stale_regular.id).update(created_at=timezone.now() - timedelta(hours=26))
 
@@ -287,14 +291,10 @@ class CeleryTasksTest(TestCase):
 
     @patch("django.core.management.call_command")
     def test_update_trending_cache_task(self, mock_call_command):
-        from main_api.tasks import task_update_trending_cache
-
         task_update_trending_cache()
         mock_call_command.assert_called_once_with("trendsetter")
 
     @patch("django.core.management.call_command")
     def test_update_user_ranks_task(self, mock_call_command):
-        from main_api.tasks import task_update_user_ranks
-
         task_update_user_ranks()
         mock_call_command.assert_called_once_with("ranker")

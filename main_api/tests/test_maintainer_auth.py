@@ -1,13 +1,22 @@
+import hashlib
+from decimal import Decimal
 from typing import Any, cast
 from unittest.mock import patch
-from django.test import TestCase
+
+from celery.exceptions import MaxRetriesExceededError
 from django.contrib.auth import get_user_model
-from rest_framework.test import APIClient
-from rest_framework import status
 from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
 from django.core.cache import cache
+from django.test import TestCase
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from rest_framework import status
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from accounts.models import Agent
+from main_api.models import ResearchNode
+from main_api.tasks import TREASURY_USERNAME, send_async_activation_email
 
 Account = get_user_model()
 
@@ -71,8 +80,6 @@ class MaintainerAuthTests(TestCase):
         self.assertEqual(refresh_res.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_missing_jwt_token_version_claim_revocation(self):
-        from rest_framework_simplejwt.tokens import RefreshToken
-
         refresh = RefreshToken.for_user(self.user)
         # Remove the claim
         if "jwt_token_version" in refresh.payload:
@@ -201,11 +208,9 @@ class MaintainerAuthTests(TestCase):
 
     @patch("main_api.tasks.send_mail", side_effect=Exception("SMTP Server Unavailable"))
     def test_async_activation_email_metric_logging_on_max_retries(self, mock_send_mail):
-        from main_api.tasks import send_async_activation_email
-
         task = cast(Any, send_async_activation_email)
         with self.assertLogs("main_api.tasks", level="CRITICAL") as cm:
-            with self.assertRaises(Exception):
+            with self.assertRaises(MaxRetriesExceededError):
                 task.push_request(retries=5)
                 try:
                     task(self.inactive_user.id, "http://test.link")
@@ -214,12 +219,6 @@ class MaintainerAuthTests(TestCase):
             self.assertTrue(any("METRIC email_delivery_failure" in log for log in cm.output))
 
     def test_delete_account_worker_disassociation(self):
-        from accounts.models import Agent
-        from main_api.models import ResearchNode
-        from main_api.tasks import TREASURY_USERNAME
-        from decimal import Decimal
-        import hashlib
-
         # 1. Create Treasury
         treasury, _ = Account.objects.get_or_create(
             username=TREASURY_USERNAME,

@@ -1,15 +1,16 @@
 from django.contrib import admin
+
 from .models import (
-    Capability,
-    ResearchNode,
-    PeerReview,
-    Comment,
-    SubComment,
-    ProfaneWord,
-    NodeType,
-    ResearchKeyword,
-    Paper,
     AgentDirective,
+    Capability,
+    Comment,
+    NodeType,
+    Paper,
+    PeerReview,
+    ProfaneWord,
+    ResearchKeyword,
+    ResearchNode,
+    SubComment,
 )
 
 

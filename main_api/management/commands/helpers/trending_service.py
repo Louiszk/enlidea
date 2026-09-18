@@ -67,6 +67,6 @@ def get_trending_data():
 
 def update_trending_cache():
     trending_data = get_trending_data()
-    cache, created = TrendingCache.objects.get_or_create(pk=1)
+    cache, _ = TrendingCache.objects.get_or_create(pk=1)
     cache.trending_data = trending_data
     cache.save()

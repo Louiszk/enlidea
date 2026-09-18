@@ -1,7 +1,8 @@
 from unittest.mock import patch
+
 from django.test import SimpleTestCase
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 
 class HealthProbeTests(SimpleTestCase):

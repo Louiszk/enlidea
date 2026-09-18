@@ -1,7 +1,12 @@
-from typing import cast, Any
-from rest_framework import status
+from datetime import timedelta
+from typing import Any, cast
+
 from django.urls import reverse
-from main_api.models import ResearchKeyword
+from django.utils import timezone
+from rest_framework import status
+
+from main_api.models import Bid, ResearchKeyword, ResearchNode
+
 from .test_agent_auth import EnlideaBaseTestCase
 
 
@@ -79,7 +84,7 @@ class NodeEditingTests(EnlideaBaseTestCase):
     def test_keyword_collision_and_empty_slugs_handled(self):
         """Test that different casing maps to the same slug without throwing IntegrityError and empty slugs are ignored."""
         # Create initial keyword
-        kw_obj = ResearchKeyword.objects.create(name="Deep Learning", slug="deep-learning")
+        ResearchKeyword.objects.create(name="Deep Learning", slug="deep-learning")
 
         payload = {"keywords": ["deep-learning", "DEEP learning", "😎"]}
 
@@ -94,8 +99,6 @@ class NodeEditingTests(EnlideaBaseTestCase):
 
     def test_cannot_edit_if_pending_bids_exist(self):
         """Should block edits if an agent has a pending bid to prevent bait-and-switch."""
-        from main_api.models import Bid
-
         Bid.objects.create(node=self.node, agent=self.agent2, status="pending", interview_response="My bid")
 
         payload = {"title": "Impossible new conditions"}
@@ -108,10 +111,6 @@ class NodeEditingTests(EnlideaBaseTestCase):
 
     def test_create_node_ignores_custom_deadline(self):
         """Initial deadline must be server-controlled (7 days) and ignore client deadline."""
-        from django.utils import timezone
-        from datetime import timedelta
-        from main_api.models import ResearchNode
-
         past_deadline = (timezone.now() - timedelta(days=10)).isoformat()
         payload = {
             "title": "Quantum Computing Validation",

@@ -1,12 +1,23 @@
-from typing import cast, Any
-from rest_framework import status
-from django.urls import reverse
 import hashlib
-from main_api.models import PeerReview
-from accounts.models import Agent, Account
-from main_api.tasks import task_resolve_node, task_auto_resolve_coordinator_decision
-from .test_agent_auth import EnlideaBaseTestCase
+from datetime import timedelta
 from decimal import Decimal
+from typing import Any, cast
+from unittest.mock import patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+
+from accounts.models import Account, Agent
+from main_api.models import PeerReview
+from main_api.tasks import (
+    execute_publish,
+    task_auto_resolve_coordinator_decision,
+    task_resolve_node,
+)
+
+from .test_agent_auth import EnlideaBaseTestCase
 
 
 class NodeLifecycleTests(EnlideaBaseTestCase):
@@ -42,8 +53,6 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
         self.assertEqual(node.status, "in_progress")
 
     def test_attachments_and_finalize(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
         node = self.create_node(self.agent1, caps=[self.cap_python])
         node.assigned_agents.add(self.agent2)
         node.status = "in_progress"
@@ -81,8 +90,6 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
         self.assertEqual(node.body, md_content.strip())
 
     def test_finalize_rejects_html_img(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
         node = self.create_node(self.agent1, caps=[self.cap_python])
         node.status = "in_progress"
         node.save()
@@ -102,8 +109,6 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
         self.assertIn("HTML media tags are not allowed.", cast(Any, response.data)["detail"])
 
     def test_finalize_with_image_title(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
         node = self.create_node(self.agent1, caps=[self.cap_python])
         node.status = "in_progress"
         node.save()
@@ -133,8 +138,6 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_finalize_with_reference_link(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
         node = self.create_node(self.agent1, caps=[self.cap_python])
         node.status = "in_progress"
         node.save()
@@ -166,9 +169,6 @@ class NodeLifecycleTests(EnlideaBaseTestCase):
 
 class OrchestratorTests(EnlideaBaseTestCase):
     def test_resolution_and_payouts(self):
-        from unittest.mock import patch
-        from main_api.tasks import execute_publish
-
         # Setup: A node in review with a completed peer review
         node = self.create_node(self.agent1, bounty=100, required_reviews=1)
         node.assigned_agents.add(self.agent2)
@@ -182,7 +182,7 @@ class OrchestratorTests(EnlideaBaseTestCase):
         # Create a reviewer (Different maintainer for collusion prevention)
         rev_m = Account.objects.create(username="rev_m", email="rev_m@enlidea.com", balance_blue_stars=1000)
         reviewer = Agent.objects.create(
-            name="Reviewer Bot", maintainer=rev_m, api_key_hash=hashlib.sha256("key-rev".encode()).hexdigest()
+            name="Reviewer Bot", maintainer=rev_m, api_key_hash=hashlib.sha256(b"key-rev").hexdigest()
         )
 
         # Create a peer review with structured data (indicating completion)
@@ -228,9 +228,6 @@ class OrchestratorTests(EnlideaBaseTestCase):
         self.assertEqual(reviewer.orange_stars, Decimal("2.8394"))
 
     def test_collaborative_payout_split(self):
-        from unittest.mock import patch
-        from main_api.tasks import execute_publish
-
         # Bounty of 100 split between 3 agents
         node = self.create_node(self.agent1, bounty=100, collaborators=3, required_reviews=1)
 
@@ -301,10 +298,6 @@ class OrchestratorTests(EnlideaBaseTestCase):
         self.assertEqual(m_worker3.balance_blue_stars, Decimal("1042.6667"))
 
     def test_auto_resolve_coordinator_decision(self):
-        from unittest.mock import patch
-        from django.utils import timezone
-        from datetime import timedelta
-
         node = self.create_node(self.agent1, collaborators=1, caps=[self.cap_python])
         node.status = "awaiting_coordinator"
         node.orchestrator_verdict = "ACCEPT"
@@ -326,8 +319,6 @@ class OrchestratorTests(EnlideaBaseTestCase):
 class PeerReviewSubmissionTests(EnlideaBaseTestCase):
     def test_empty_peer_review_submission_rejected(self):
         node = self.create_node(self.agent1, caps=[self.cap_python])
-        from main_api.models import PeerReview
-
         review = PeerReview.objects.create(
             assigned_reviewer=self.agent2,
             research_node=node,

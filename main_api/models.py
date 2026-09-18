@@ -1,14 +1,19 @@
-from django.db import models, transaction
-from django.conf import settings
-from django.core.validators import MaxValueValidator, MinValueValidator, MaxLengthValidator
-from django.utils import timezone
-from django.contrib.postgres.fields import ArrayField
-from decimal import Decimal
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.db.models import F, Sum, ExpressionWrapper, FloatField
-from datetime import timedelta
 import json
+from datetime import timedelta
+from decimal import Decimal
+
+from django.apps import apps
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MaxLengthValidator, MaxValueValidator, MinValueValidator
+from django.db import models, transaction
+from django.db.models import Avg, Count, ExpressionWrapper, F, FloatField, IntegerField, OuterRef, Subquery, Sum
+from django.db.models.functions import Coalesce
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
+from django.dispatch import receiver
+from django.utils import timezone
+
+from accounts.models import Agent
 
 User = settings.AUTH_USER_MODEL
 
@@ -151,10 +156,6 @@ class ResearchKeyword(models.Model):
 
 class ResearchNodeQuerySet(models.QuerySet):
     def with_aggregates(self):
-        from django.db.models.functions import Coalesce
-        from django.db.models import Avg, Count, FloatField, IntegerField, Subquery, OuterRef
-        from django.apps import apps
-
         PeerReview = apps.get_model("main_api", "PeerReview")
 
         avg_sq = (
@@ -226,7 +227,7 @@ class ResearchNode(models.Model):
     escalated_to_counsel = models.BooleanField(default=False)
 
     bounty_amount = models.DecimalField(
-        max_digits=12, decimal_places=4, default=Decimal("0.0000"), validators=[MinValueValidator(Decimal("0"))]
+        max_digits=12, decimal_places=4, default=Decimal("0.0000"), validators=[MinValueValidator(Decimal(0))]
     )
     forfeited_bounty = models.DecimalField(
         max_digits=12,
@@ -386,7 +387,7 @@ class PeerReview(models.Model):
         max_digits=12,
         decimal_places=4,
         default=Decimal("5.0000"),
-        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("10"))],
+        validators=[MinValueValidator(Decimal(0)), MaxValueValidator(Decimal(10))],
     )
     is_approved = models.BooleanField(default=False)
 
@@ -504,11 +505,6 @@ class Attachment(models.Model):
         return f"Attachment for {self.node.title} by {self.uploaded_by.name}"
 
 
-from django.db import transaction
-from django.db.models.signals import post_delete, m2m_changed, pre_delete
-from django.dispatch import receiver
-
-
 @receiver(post_delete, sender=Attachment)
 def auto_delete_file_on_delete(sender, instance, **kwargs):
     if instance.file:
@@ -544,8 +540,6 @@ class AgentNodeSync(models.Model):
 
 @receiver(post_delete, sender=AgentDirective)
 def update_agent_timestamp_on_directive_delete(sender, instance, **kwargs):
-    from accounts.models import Agent
-
     if instance.agent_id:
         Agent.objects.filter(pk=instance.agent_id).update(updated_at=timezone.now())
     elif instance.maintainer_id:
@@ -554,16 +548,12 @@ def update_agent_timestamp_on_directive_delete(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=PeerReview)
 def update_agent_timestamp_on_review_delete(sender, instance, **kwargs):
-    from accounts.models import Agent
-
     if instance.assigned_reviewer_id:
         Agent.objects.filter(pk=instance.assigned_reviewer_id).update(updated_at=timezone.now())
 
 
 @receiver(post_delete, sender=Bid)
 def update_agent_timestamp_on_bid_delete(sender, instance, **kwargs):
-    from accounts.models import Agent
-
     if instance.agent_id:
         Agent.objects.filter(pk=instance.agent_id).update(updated_at=timezone.now())
 
@@ -571,8 +561,6 @@ def update_agent_timestamp_on_bid_delete(sender, instance, **kwargs):
 @receiver(m2m_changed, sender=ResearchNode.assigned_agents.through)
 def update_timestamps_on_assigned_agents_change(sender, instance, action, reverse, pk_set, **kwargs):
     """Bumps timestamps when workers are added or removed from a node."""
-    from accounts.models import Agent
-
     now = timezone.now()
 
     if action == "pre_clear":
@@ -602,8 +590,6 @@ def update_timestamps_on_assigned_agents_change(sender, instance, action, revers
 @receiver(pre_delete, sender=ResearchNode)
 def update_agent_timestamp_on_node_delete(sender, instance, **kwargs):
     """Bumps timestamps for related agents before the node is deleted to invalidate their sync cache."""
-    from accounts.models import Agent
-
     agent_ids = set()
     if instance.coordinating_agent_id:
         agent_ids.add(instance.coordinating_agent_id)

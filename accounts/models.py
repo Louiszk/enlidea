@@ -1,16 +1,18 @@
-from decimal import Decimal
-from django.db import models
-from django.core.validators import MaxLengthValidator
-from django.contrib.postgres.fields import ArrayField
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.utils.translation import gettext_lazy as _
-from django.utils import timezone
-from django.core.exceptions import ValidationError
 import re
+from decimal import Decimal
+
+from django.apps import apps
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxLengthValidator
+from django.db import models
+from django.db.models import Avg, Count, Func, Sum
 from django.db.models.functions import Coalesce
-from django.db.models import Func, Count, Avg, Sum
-from django.db.models.signals import post_save, post_delete, m2m_changed
+from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 class ArrayLength(Func):
@@ -91,7 +93,8 @@ class Account(AbstractBaseUser, PermissionsMixin):
         return self.email
 
     def get_all_peer_reviews(self):
-        from main_api.models import ResearchNode, PeerReview
+        ResearchNode = apps.get_model("main_api", "ResearchNode")
+        PeerReview = apps.get_model("main_api", "PeerReview")
 
         user_research_nodes = ResearchNode.objects.filter(coordinating_agent__maintainer=self)
         all_reviews = PeerReview.objects.filter(research_node__in=user_research_nodes)
@@ -119,14 +122,15 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     @property
     def total_peer_reviews(self):
-        from main_api.models import ResearchNode, PeerReview
+        ResearchNode = apps.get_model("main_api", "ResearchNode")
+        PeerReview = apps.get_model("main_api", "PeerReview")
 
         user_research_nodes = ResearchNode.objects.filter(coordinating_agent__maintainer=self)
         return PeerReview.objects.filter(research_node__in=user_research_nodes).count()
 
     @property
     def total_fulfillments(self):
-        from main_api.models import ResearchNode
+        ResearchNode = apps.get_model("main_api", "ResearchNode")
 
         return ResearchNode.objects.filter(coordinating_agent__maintainer=self).aggregate(
             total_fulfillments=Coalesce(Count("assigned_agents"), 0)
@@ -134,13 +138,13 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     @property
     def total_research_nodes(self):
-        from main_api.models import ResearchNode
+        ResearchNode = apps.get_model("main_api", "ResearchNode")
 
         return ResearchNode.objects.filter(coordinating_agent__maintainer=self).count()
 
     @property
     def total_node_saves(self):
-        from main_api.models import ResearchNode
+        ResearchNode = apps.get_model("main_api", "ResearchNode")
 
         return (
             ResearchNode.objects.filter(coordinating_agent__maintainer=self).aggregate(total_saves=models.Sum("saves"))[
@@ -151,7 +155,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     @property
     def total_node_visits(self):
-        from main_api.models import ResearchNode
+        ResearchNode = apps.get_model("main_api", "ResearchNode")
 
         return (
             ResearchNode.objects.filter(coordinating_agent__maintainer=self).aggregate(
@@ -162,7 +166,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     @property
     def total_appreciation_score(self):
-        from main_api.models import Paper
+        Paper = apps.get_model("main_api", "Paper")
 
         # Get all distinct papers authored by any of this maintainer's agents and sum the score
         return (
@@ -211,7 +215,7 @@ def sync_maintainer_orange_stars_on_agent_change(sender, instance, **kwargs):
         agent_os_sum = maintainer.agents.filter(is_active=True).aggregate(total=Sum("orange_stars"))[
             "total"
         ] or Decimal("0.0000")
-        new_score = round(float(agent_os_sum + (maintainer.balance_blue_stars / Decimal("10"))))
+        new_score = round(float(agent_os_sum + (maintainer.balance_blue_stars / Decimal(10))))
 
         if maintainer.balance_orange_stars != agent_os_sum or maintainer.score != new_score:
             Account.objects.filter(id=maintainer.id).update(

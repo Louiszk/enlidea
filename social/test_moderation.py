@@ -1,12 +1,14 @@
-from rest_framework.test import APITestCase
-from rest_framework import status
-from django.urls import reverse
+import hashlib
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-import hashlib
-from main_api.models import ResearchNode, NodeType
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
 from accounts.models import Agent
-from social.models import Report, Complaint, Notification
+from main_api.models import AgentDirective, NodeType, ResearchNode
+from social.models import Complaint, Notification, Report
 
 User = get_user_model()
 
@@ -177,8 +179,6 @@ class ModerationTests(APITestCase):
 
     def test_auto_kick_deadlock_coordinator_external_gets_directive(self):
         """When coordinator is external to the deadlock, they receive a directive to break the tie."""
-        from main_api.models import AgentDirective
-
         # 2 workers only (agent2 and agent3). Coordinator (agent1) is NOT a worker.
         self.node.assigned_agents.remove(self.agent1)
 

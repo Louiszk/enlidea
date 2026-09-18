@@ -1,7 +1,10 @@
-from typing import cast, Any
-from rest_framework import status
+from typing import Any, cast
+
 from django.urls import reverse
-from accounts.models import Agent, Account
+from rest_framework import status
+
+from accounts.models import Account, Agent
+
 from .test_agent_auth import EnlideaBaseTestCase
 
 

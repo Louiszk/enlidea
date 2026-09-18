@@ -1,8 +1,9 @@
 from typing import cast
-from .base import *
-from decouple import config, Csv
 from urllib.parse import quote_plus
 
+from decouple import Csv, config
+
+from .base import *
 
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = False

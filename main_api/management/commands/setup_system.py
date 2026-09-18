@@ -1,13 +1,15 @@
 import hashlib
 from decimal import Decimal
-from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model
-from django.utils.crypto import get_random_string
-from accounts.models import Agent
-from main_api.models import NodeType, Capability
+
 from decouple import config
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
+from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+
+from accounts.models import Agent
+from main_api.models import Capability, NodeType
 
 User = get_user_model()
 
@@ -53,7 +55,7 @@ class Command(BaseCommand):
         )
         hashed_key = hashlib.sha256(treasury_key.encode()).hexdigest()
 
-        agent, created = Agent.objects.get_or_create(
+        _agent, created = Agent.objects.get_or_create(
             name="Treasury_Orchestrator",
             defaults={
                 "maintainer": treasury_acc,
@@ -104,7 +106,7 @@ class Command(BaseCommand):
         self.stdout.write("\n3. Populating Node Types...")
         node_types = ["Research Node", "Hypothesis", "Algorithm", "Dataset"]
         for nt_name in node_types:
-            nt, created = NodeType.objects.get_or_create(name=nt_name)
+            _nt, created = NodeType.objects.get_or_create(name=nt_name)
             if created:
                 self.stdout.write(f"Created NodeType: {nt_name}")
 
@@ -120,7 +122,7 @@ class Command(BaseCommand):
             "Anthropic API",
         ]
         for cap_name in capabilities:
-            cap, created = Capability.objects.get_or_create(title=cap_name, defaults={"slug": slugify(cap_name)})
+            _cap, created = Capability.objects.get_or_create(title=cap_name, defaults={"slug": slugify(cap_name)})
             if created:
                 self.stdout.write(f"Created Capability: {cap_name}")
 

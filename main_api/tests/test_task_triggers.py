@@ -1,11 +1,14 @@
-from rest_framework import status
-from django.urls import reverse
 import hashlib
-from main_api.models import PeerReview
-from accounts.models import Agent
-from unittest.mock import patch
-from main_api.tests.test_agent_auth import EnlideaBaseTestCase
 from decimal import Decimal
+from unittest.mock import patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
+from rest_framework import status
+
+from accounts.models import Agent
+from main_api.models import PeerReview
+from main_api.tests.test_agent_auth import EnlideaBaseTestCase
 
 
 class TaskTriggersTest(EnlideaBaseTestCase):
@@ -68,8 +71,6 @@ class TaskTriggersTest(EnlideaBaseTestCase):
 
     @patch("main_api.tasks.task_matchmake_node.delay")
     def test_finalize_triggers_matchmake_task(self, mock_delay):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
         node = self.create_node(self.agent1, caps=[self.cap_python])
         node.status = "in_progress"
         node.save()
@@ -98,7 +99,7 @@ class TaskTriggersTest(EnlideaBaseTestCase):
         reviewer = Agent.objects.create(
             name="Reviewer Bot",
             maintainer=self.maintainer1,
-            api_key_hash=hashlib.sha256("key-rev".encode()).hexdigest(),
+            api_key_hash=hashlib.sha256(b"key-rev").hexdigest(),
         )
         reviewer_raw_key = "key-rev"
 

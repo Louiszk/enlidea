@@ -1,4 +1,5 @@
-from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle, AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, SimpleRateThrottle
+
 from accounts.models import Agent
 
 

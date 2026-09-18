@@ -1,14 +1,17 @@
-from typing import cast, Any
-from django.test import TestCase, Client
-from django.urls import reverse
-from rest_framework import status
-from decimal import Decimal
-from main_api.models import ResearchNode, AgentMessage
-from accounts.models import Agent
-from django.utils import timezone
-from datetime import timedelta
 import time
+from datetime import timedelta
+from decimal import Decimal
+from typing import Any, cast
+
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from accounts.models import Agent
+from main_api.models import AgentMessage, AgentNodeSync, ResearchNode
 
 User = get_user_model()
 
@@ -38,8 +41,6 @@ class CollaborationWorkspaceTests(TestCase):
 
     def test_get_messages_assigned_agent(self):
         # Authenticate as agent (using the authentication class in views)
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.worker)
 
@@ -55,8 +56,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertEqual(cast(Any, response.data)[0]["sender_name"], "Coordinator")
 
     def test_post_message_assigned_agent(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.worker)
 
@@ -69,8 +68,6 @@ class CollaborationWorkspaceTests(TestCase):
         )
 
     def test_message_access_denied(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.other_agent)
 
@@ -83,18 +80,16 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_get_messages_since_timestamp(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.worker)
 
         url = reverse("researchnode-messages", kwargs={"pk": self.node.pk})
 
-        m1 = AgentMessage.objects.create(node=self.node, sender=self.coordinator, content="Old message")
+        AgentMessage.objects.create(node=self.node, sender=self.coordinator, content="Old message")
         time.sleep(0.1)
         ts = timezone.now().timestamp()
         time.sleep(0.1)
-        m2 = AgentMessage.objects.create(node=self.node, sender=self.worker, content="New message")
+        AgentMessage.objects.create(node=self.node, sender=self.worker, content="New message")
 
         response = api_client.get(url, {"since_timestamp": ts})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -102,8 +97,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertEqual(cast(Any, response.data)[0]["content"], "New message")
 
     def test_patch_plan_coordinator_only(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         url = reverse("researchnode-plan", kwargs={"pk": self.node.pk})
 
@@ -124,8 +117,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertTrue(AgentMessage.objects.filter(node=self.node, sender=None, content__icontains="SYSTEM").exists())
 
     def test_sync_timestamp_updates_on_message(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.worker)
         url_sync = reverse("agent-sync")
@@ -147,8 +138,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertGreater(ts2, ts1)
 
     def test_extend_deadline_success(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.worker)
         url = reverse("researchnode-extend-deadline", kwargs={"pk": self.node.pk})
@@ -180,8 +169,6 @@ class CollaborationWorkspaceTests(TestCase):
         )
 
     def test_read_before_write_constraint(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         url = reverse("researchnode-messages", kwargs={"pk": self.node.pk})
 
@@ -208,8 +195,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify sync record was updated
-        from main_api.models import AgentNodeSync
-
         sync = AgentNodeSync.objects.get(agent=self.worker, node=self.node)
         self.assertIsNotNone(sync.last_synced_at)
 
@@ -218,8 +203,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_read_before_write_system_message(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         url = reverse("researchnode-messages", kwargs={"pk": self.node.pk})
 
@@ -239,8 +222,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_extend_deadline_exceeds_max(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.coordinator)
         url = reverse("researchnode-extend-deadline", kwargs={"pk": self.node.pk})
@@ -250,8 +231,6 @@ class CollaborationWorkspaceTests(TestCase):
         self.assertIn("Maximum allowed total extension is 14 days", cast(Any, response.data)["detail"])
 
     def test_extend_deadline_unauthorized(self):
-        from rest_framework.test import APIClient
-
         api_client = APIClient()
         api_client.force_authenticate(user=self.other_agent)
         url = reverse("researchnode-extend-deadline", kwargs={"pk": self.node.pk})
