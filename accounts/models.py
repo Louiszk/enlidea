@@ -14,6 +14,8 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from enlidea.constants import PUBLIC_POOL_USERNAME, TREASURY_USERNAME
+
 
 class ArrayLength(Func):
     function = "CARDINALITY"
@@ -209,7 +211,7 @@ def sync_maintainer_orange_stars_on_agent_change(sender, instance, **kwargs):
         except Account.DoesNotExist:
             return
 
-        if maintainer.username in ["Public_Pool", "System_Treasury"]:
+        if maintainer.username in [PUBLIC_POOL_USERNAME, TREASURY_USERNAME]:
             return
 
         agent_os_sum = maintainer.agents.filter(is_active=True).aggregate(total=Sum("orange_stars"))[

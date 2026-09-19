@@ -5,151 +5,28 @@ from datetime import timedelta
 from decimal import Decimal
 
 from celery import shared_task
-from celery.exceptions import MaxRetriesExceededError, Retry
-from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
-from django.core.management import call_command
+from celery.exceptions import Retry
+from django.core import management
 from django.db import transaction
 from django.db.models import F
-from django.template.loader import render_to_string
 from django.utils import timezone
 
 from accounts.models import Account, Agent
+from enlidea.constants import (
+    BAN_THRESHOLD_OS,
+    COUNSEL_BS_REWARD,
+    LAMBDA,
+    MIN_OS_PENALTY,
+    PUBLIC_POOL_USERNAME,
+    REVIEWER_BS_REWARD,
+    STAKE_RATE,
+    TAX_RATE,
+    TREASURY_USERNAME,
+)
 from main_api.models import Paper, PeerReview, ResearchNode, Trend
 from social.models import Notification
 
 logger = logging.getLogger(__name__)
-
-# Constants for Tokenomics
-TREASURY_USERNAME = "System_Treasury"
-TAX_RATE = Decimal("0.02")
-STAKE_RATE = Decimal("0.10")
-REVIEWER_BS_REWARD = Decimal("2.0000")
-MIN_OS_PENALTY = Decimal("5.0000")
-BAN_THRESHOLD_OS = Decimal("-20.0000")
-LAMBDA = Decimal("0.02")
-REVISION_FEE = Decimal("5.0000")
-ESCALATION_FEE = Decimal("20.0000")
-COUNSEL_BS_REWARD = Decimal("4.0000")
-
-
-@shared_task(
-    bind=True,
-    max_retries=5,
-    default_retry_delay=5,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-)
-def send_async_activation_email(self, user_id, activation_link):
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.error(f"Failed to send activation email: User {user_id} not found.")
-        return
-
-    try:
-        mail_subject = "Activate your Enlidea account."
-        message = render_to_string(
-            "accounts/account_activation_email.html", {"account": user, "activation_link": activation_link}
-        )
-        send_mail(
-            mail_subject,
-            message,
-            settings.EMAIL_HOST_USER,
-            [user.email],
-            fail_silently=False,
-        )
-        logger.info(f"Activation email sent to {user.email}")
-    except (Retry, MaxRetriesExceededError):
-        raise
-    except Exception as e:
-        logger.error(f"Error sending activation email to user {user_id}: {e!s}")
-        if self.request.retries >= self.max_retries:
-            logger.critical(
-                f"METRIC email_delivery_failure task=send_async_activation_email user_id={user_id} error={e!s}"
-            )
-        raise self.retry(exc=e)
-
-
-@shared_task(
-    bind=True,
-    max_retries=5,
-    default_retry_delay=5,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-)
-def send_async_password_reset_email(self, user_id, reset_link):
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.error(f"Failed to send password reset email: User {user_id} not found.")
-        return
-
-    try:
-        mail_subject = "Reset your Enlidea account password."
-        message = render_to_string("accounts/password_reset_email.html", {"account": user, "reset_link": reset_link})
-        send_mail(
-            mail_subject,
-            message,
-            settings.EMAIL_HOST_USER,
-            [user.email],
-            fail_silently=False,
-        )
-        logger.info(f"Password reset email sent to {user.email}")
-    except (Retry, MaxRetriesExceededError):
-        raise
-    except Exception as e:
-        logger.error(f"Error sending password reset email to user {user_id}: {e!s}")
-        if self.request.retries >= self.max_retries:
-            logger.critical(
-                f"METRIC email_delivery_failure task=send_async_password_reset_email user_id={user_id} error={e!s}"
-            )
-        raise self.retry(exc=e)
-
-
-@shared_task(
-    bind=True,
-    max_retries=5,
-    default_retry_delay=5,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-)
-def send_async_verification_email(self, user_id, new_email, verification_link):
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.error(f"Failed to send verification email: User {user_id} not found.")
-        return
-
-    try:
-        mail_subject = "Change your Enlidea account email address."
-        message = render_to_string(
-            "accounts/account_change_email.html", {"account": user, "verification_link": verification_link}
-        )
-        send_mail(
-            mail_subject,
-            message,
-            settings.EMAIL_HOST_USER,
-            [new_email],
-            fail_silently=False,
-        )
-        logger.info(f"Email change verification sent to {new_email}")
-    except (Retry, MaxRetriesExceededError):
-        raise
-    except Exception as e:
-        logger.error(f"Error sending verification email for user {user_id}: {e!s}")
-        if self.request.retries >= self.max_retries:
-            logger.critical(
-                f"METRIC email_delivery_failure task=send_async_verification_email user_id={user_id} error={e!s}"
-            )
-        raise self.retry(exc=e)
 
 
 @shared_task
@@ -208,7 +85,7 @@ def task_matchmake_node(node_id):
 
         base_eligible = (
             Agent.objects.filter(is_active=True)
-            .exclude(maintainer__username="Public_Pool")
+            .exclude(maintainer__username=PUBLIC_POOL_USERNAME)
             .exclude(maintainer__username=TREASURY_USERNAME)
             .exclude(maintainer_id__in=involved_maintainer_ids)
             .exclude(id__in=excluded_agents)
@@ -329,7 +206,7 @@ def task_matchmake_counsel(node_id):
         # Filter base for active, non-involved agents
         base_query = (
             Agent.objects.filter(is_active=True)
-            .exclude(maintainer__username="Public_Pool")
+            .exclude(maintainer__username=PUBLIC_POOL_USERNAME)
             .exclude(maintainer__username=TREASURY_USERNAME)
             .exclude(maintainer_id__in=involved_maintainer_ids)
             .exclude(id__in=excluded_agents)
@@ -965,7 +842,7 @@ def task_fill_counsel_shortages():
 )
 def task_flush_expired_tokens(self):
     try:
-        call_command("flushexpiredtokens")
+        management.call_command("flushexpiredtokens")
         logger.info("Successfully flushed expired SimpleJWT tokens.")
     except Retry:
         raise
@@ -1005,7 +882,7 @@ def task_clean_anon_agents(self):
 )
 def task_update_trending_cache(self):
     try:
-        call_command("trendsetter")
+        management.call_command("trendsetter")
         logger.info("Successfully updated trending cache.")
     except Retry:
         raise
@@ -1024,7 +901,7 @@ def task_update_trending_cache(self):
 )
 def task_update_user_ranks(self):
     try:
-        call_command("ranker")
+        management.call_command("ranker")
         logger.info("Successfully updated maintainer ranks and scores.")
     except Retry:
         raise

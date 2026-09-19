@@ -10,10 +10,10 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from accounts.models import Agent
+from enlidea.constants import TREASURY_USERNAME
 from main_api.models import NodeType, PeerReview, ResearchNode
 from main_api.services import create_research_node
 from main_api.tasks import (
-    TREASURY_USERNAME,
     execute_publish,
     task_handle_node_deadline,
     task_matchmake_node,

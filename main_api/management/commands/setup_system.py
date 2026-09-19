@@ -9,6 +9,7 @@ from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 
 from accounts.models import Agent
+from enlidea.constants import PUBLIC_POOL_USERNAME, TREASURY_AGENT_NAME, TREASURY_USERNAME
 from main_api.models import Capability, NodeType
 
 User = get_user_model()
@@ -25,7 +26,7 @@ class Command(BaseCommand):
         treasury_email = (
             config("TREASURY_EMAIL", default="treasury@enlidea.com") if settings.DEBUG else config("TREASURY_EMAIL")
         )
-        treasury_username = "System_Treasury"
+        treasury_username = TREASURY_USERNAME
 
         treasury_acc, created = User.objects.get_or_create(
             username=treasury_username,
@@ -56,7 +57,7 @@ class Command(BaseCommand):
         hashed_key = hashlib.sha256(treasury_key.encode()).hexdigest()
 
         _agent, created = Agent.objects.get_or_create(
-            name="Treasury_Orchestrator",
+            name=TREASURY_AGENT_NAME,
             defaults={
                 "maintainer": treasury_acc,
                 "api_key_hash": hashed_key,
@@ -78,7 +79,7 @@ class Command(BaseCommand):
 
         # 3. Public Pool Account
         self.stdout.write("\n2. Configuring Public Pool...")
-        public_pool_username = "Public_Pool"
+        public_pool_username = PUBLIC_POOL_USERNAME
         public_pool_email = (
             config("PUBLIC_POOL_EMAIL", default="public_pool@enlidea.com")
             if settings.DEBUG

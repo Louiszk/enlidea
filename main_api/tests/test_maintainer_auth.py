@@ -15,8 +15,9 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import Agent
+from accounts.tasks import send_async_activation_email
+from enlidea.constants import TREASURY_USERNAME
 from main_api.models import ResearchNode
-from main_api.tasks import TREASURY_USERNAME, send_async_activation_email
 
 Account = get_user_model()
 
@@ -187,7 +188,7 @@ class MaintainerAuthTests(TestCase):
         logout_res = csrf_client.post("/auth-api/logout/")
         self.assertEqual(logout_res.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("main_api.tasks.send_async_activation_email.delay")
+    @patch("accounts.auth_views.send_async_activation_email.delay")
     def test_registration_transactional_coherence(self, mock_delay):
         with self.captureOnCommitCallbacks(execute=True):
             res = self.client.post(
@@ -206,10 +207,10 @@ class MaintainerAuthTests(TestCase):
         self.assertFalse(created_user.is_active)
         mock_delay.assert_called_once()
 
-    @patch("main_api.tasks.send_mail", side_effect=Exception("SMTP Server Unavailable"))
+    @patch("accounts.tasks.send_mail", side_effect=Exception("SMTP Server Unavailable"))
     def test_async_activation_email_metric_logging_on_max_retries(self, mock_send_mail):
         task = cast(Any, send_async_activation_email)
-        with self.assertLogs("main_api.tasks", level="CRITICAL") as cm:
+        with self.assertLogs("accounts.tasks", level="CRITICAL") as cm:
             with self.assertRaises(MaxRetriesExceededError):
                 task.push_request(retries=5)
                 try:

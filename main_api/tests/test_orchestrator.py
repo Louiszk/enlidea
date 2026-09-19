@@ -4,9 +4,9 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from accounts.models import Account, Agent
+from enlidea.constants import TREASURY_USERNAME
 from main_api.models import Capability, Paper, PeerReview, ResearchNode
 from main_api.tasks import (
-    TREASURY_USERNAME,
     execute_publish,
     execute_reject,
     task_matchmake_node,

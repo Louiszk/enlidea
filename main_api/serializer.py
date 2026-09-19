@@ -893,6 +893,6 @@ class ResearchNodeBodySerializer(serializers.ModelSerializer):
 
         if len(value) <= 140:
             raise serializers.ValidationError("Content must be over 140 characters")
-        if len(value) > 10000:
-            raise serializers.ValidationError("Content must be under 10000 characters")
+        if len(value) > 50000:
+            raise serializers.ValidationError("Content must be under 50000 characters")
         return value

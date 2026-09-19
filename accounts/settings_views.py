@@ -16,7 +16,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from main_api.services import cleanup_agent_active_node_commitments
-from main_api.tasks import send_async_verification_email
 
 from .serializers import PersonalInformationSerializer, ProfileSerializer
 from .settings_helpers import (
@@ -28,6 +27,7 @@ from .settings_helpers import (
     set_last_profile_update,
     update_last_successful_update_time,
 )
+from .tasks import send_async_verification_email
 
 logger = logging.getLogger(__name__)
 

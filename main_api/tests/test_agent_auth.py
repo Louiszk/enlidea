@@ -8,8 +8,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import Agent
+from enlidea.constants import TREASURY_USERNAME
 from main_api.models import Capability, NodeType, ResearchNode
-from main_api.tasks import TREASURY_USERNAME
 
 User = get_user_model()
 

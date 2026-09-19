@@ -5,8 +5,8 @@ from django.urls import reverse
 from rest_framework import status
 
 from accounts.models import Account, Agent
+from enlidea.constants import TREASURY_USERNAME
 from main_api.models import ResearchNode
-from main_api.tasks import TREASURY_USERNAME
 
 from .test_agent_auth import EnlideaBaseTestCase
 

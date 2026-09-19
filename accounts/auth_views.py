@@ -20,12 +20,13 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from main_api.tasks import TREASURY_USERNAME, send_async_activation_email, send_async_password_reset_email
+from enlidea.constants import SIGNUP_BONUS_BS, TREASURY_USERNAME
 
 from .auth_helpers import check_login_attempts, get_remaining_attempts, increment_login_attempts, reset_login_attempts
 from .authentication import CookieJWTAuthentication, enforce_csrf
 from .models import validate_username
 from .serializers import AccountSerializer, EmailSerializer, PasswordResetConfirmSerializer, PasswordSerializer
+from .tasks import send_async_activation_email, send_async_password_reset_email
 from .throttling import UsernameCheckThrottle
 
 logger = logging.getLogger(__name__)
@@ -216,7 +217,7 @@ def activate_account(request, uidb64, token):
                 # Tokenomics: Closed-loop signup bonus (if Treasury allows)
                 try:
                     treasury_acc = get_user_model().objects.select_for_update().get(username=TREASURY_USERNAME)
-                    signup_bonus = Decimal("100.0000")
+                    signup_bonus = SIGNUP_BONUS_BS
 
                     if treasury_acc.balance_blue_stars >= signup_bonus:
                         treasury_acc.balance_blue_stars -= signup_bonus

@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import Account, Agent
+from enlidea.constants import TREASURY_USERNAME
 from main_api.models import (
     AgentDirective,
     Bid,
@@ -19,7 +20,6 @@ from main_api.models import (
     ResearchNode,
 )
 from main_api.services import create_research_node
-from main_api.tasks import TREASURY_USERNAME
 
 
 class SyncEndpointTest(APITestCase):

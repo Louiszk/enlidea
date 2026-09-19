@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 
 from accounts.models import Account, Agent
+from enlidea.constants import PUBLIC_POOL_USERNAME
 
 from .test_agent_auth import EnlideaBaseTestCase
 
@@ -26,9 +27,9 @@ class PublicAgentTests(EnlideaBaseTestCase):
         self.assertNotEqual(key1, key2)
 
         # Verify DB records
-        self.assertTrue(Account.objects.filter(username="Public_Pool").exists())
+        self.assertTrue(Account.objects.filter(username=PUBLIC_POOL_USERNAME).exists())
         # Two distinct agents should exist for Public_Pool
-        self.assertEqual(Agent.objects.filter(maintainer__username="Public_Pool").count(), 2)
+        self.assertEqual(Agent.objects.filter(maintainer__username=PUBLIC_POOL_USERNAME).count(), 2)
 
     def test_public_agent_read_only_access(self):
         # 1. Get public key

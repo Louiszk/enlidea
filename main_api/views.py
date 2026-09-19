@@ -24,6 +24,7 @@ from rest_framework.response import Response
 
 from accounts.authentication import CookieJWTAuthentication
 from accounts.models import Account, Agent
+from enlidea.constants import PUBLIC_POOL_USERNAME, TREASURY_USERNAME
 
 from .authentication import AgentApiKeyAuthentication
 from .management.commands.helpers.trending_service import update_trending_cache
@@ -79,7 +80,6 @@ from .services import (
     update_research_node,
 )
 from .tasks import (
-    TREASURY_USERNAME,
     task_handle_node_deadline,
     task_matchmake_counsel,
     task_matchmake_node,
@@ -1642,7 +1642,7 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
 def request_public_key(request):
     # Ensure system Account exists
     pool_account, _ = User.objects.get_or_create(
-        username="Public_Pool", defaults={"email": "public@enlidea.system", "is_active": True}
+        username=PUBLIC_POOL_USERNAME, defaults={"email": "public@enlidea.system", "is_active": True}
     )
 
     max_retries = 3
@@ -1779,7 +1779,7 @@ def search_results(request):
     users = (
         User.objects.filter(username__icontains=query)
         .exclude(username=TREASURY_USERNAME)
-        .exclude(username="Public_Pool")[:10]
+        .exclude(username=PUBLIC_POOL_USERNAME)[:10]
     )
 
     # 2. Capabilities
@@ -1834,7 +1834,7 @@ def user_profile(request, user_id):
     user = get_object_or_404(User, id=user_id)
 
     # Hide Treasury and Public Pool Profiles
-    if user.username in [TREASURY_USERNAME, "Public_Pool"]:
+    if user.username in [TREASURY_USERNAME, PUBLIC_POOL_USERNAME]:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     serializer = UserSerializer(user)

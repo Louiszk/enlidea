@@ -7,6 +7,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import Agent
+from enlidea.constants import PUBLIC_POOL_USERNAME
 from main_api.models import NodeType, ResearchNode, Trend, TrendingCache
 
 User = get_user_model()
@@ -23,7 +24,7 @@ class TrendingAndRankerTests(TestCase):
             is_active=True,
         )
         self.public_pool = User.objects.create_user(
-            username="Public_Pool",
+            username=PUBLIC_POOL_USERNAME,
             email="public_pool@example.com",
             password="Password123!",
             is_active=True,
