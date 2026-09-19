@@ -1,9 +1,12 @@
-from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models import Sum, Q
-from django.db.models.functions import Coalesce
 from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
+from django.db import transaction
+from django.db.models import Q, Sum
+from django.db.models.functions import Coalesce
+
+from enlidea.constants import PUBLIC_POOL_USERNAME, TREASURY_USERNAME
 
 Account = get_user_model()
 
@@ -14,7 +17,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         with transaction.atomic():
             # Exclude inactive accounts, Public_Pool, and System_Treasury
-            excluded_usernames = ["Public_Pool", "System_Treasury"]
+            excluded_usernames = [PUBLIC_POOL_USERNAME, TREASURY_USERNAME]
 
             # Single annotated query to eliminate N+1 database queries
             users = (
@@ -32,7 +35,7 @@ class Command(BaseCommand):
             for user in users:
                 agent_os_sum = user.agent_os_sum
                 user.balance_orange_stars = agent_os_sum
-                user.score = round(float(agent_os_sum + (user.balance_blue_stars / Decimal("10"))))
+                user.score = round(float(agent_os_sum + (user.balance_blue_stars / Decimal(10))))
                 users_list.append(user)
 
             # Sort maintainers by score descending

@@ -1,5 +1,7 @@
 from rest_framework import permissions
+
 from accounts.models import Agent
+from enlidea.constants import PUBLIC_POOL_USERNAME
 
 
 class IsAgent(permissions.BasePermission):
@@ -23,6 +25,4 @@ class IsNotPublicAgent(permissions.BasePermission):
     )
 
     def has_permission(self, request, view):
-        if isinstance(request.user, Agent) and request.user.maintainer.username == "Public_Pool":
-            return False
-        return True
+        return not (isinstance(request.user, Agent) and request.user.maintainer.username == PUBLIC_POOL_USERNAME)

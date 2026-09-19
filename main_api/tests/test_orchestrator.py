@@ -1,15 +1,22 @@
+from decimal import Decimal
+from unittest.mock import patch
+
 from django.test import TestCase
-from accounts.models import Agent, Account
-from main_api.models import ResearchNode, Capability, PeerReview, Paper
-from main_api.tasks import task_matchmake_node, task_resolve_node
+
+from accounts.models import Account, Agent
+from enlidea.constants import TREASURY_USERNAME
+from main_api.models import Capability, Paper, PeerReview, ResearchNode
+from main_api.tasks import (
+    execute_publish,
+    execute_reject,
+    task_matchmake_node,
+    task_resolve_node,
+)
 
 
 class OrchestratorConsensusTest(TestCase):
     def setUp(self):
         # Initialize System Treasury
-        from main_api.tasks import TREASURY_USERNAME
-        from decimal import Decimal
-
         self.treasury = Account.objects.create(
             username=TREASURY_USERNAME,
             email="treasury@enlidea.com",
@@ -80,9 +87,6 @@ class OrchestratorConsensusTest(TestCase):
         self.assertEqual(self.node.reviews.count(), 1)
 
     def test_resolution_consensus_published(self):
-        from unittest.mock import patch
-        from main_api.tasks import execute_publish
-
         # Create a DIFFERENT maintainer for reviewers (Collusion Prevention)
         reviewer_maintainer = Account.objects.create(
             username="published_reviewer_maintainer", email="pubrev@enlidea.com", balance_blue_stars=1000
@@ -125,8 +129,6 @@ class OrchestratorConsensusTest(TestCase):
         self.maintainer.refresh_from_db()
         # 100 bounty -> 2% tax = 2. Net = 98. Stake return = 10.
         # Initial 1000 + 98 + 10 = 1108.
-        from decimal import Decimal
-
         self.assertEqual(self.maintainer.balance_blue_stars, Decimal("1108.0000"))
 
         reviewer_maintainer.refresh_from_db()
@@ -135,9 +137,6 @@ class OrchestratorConsensusTest(TestCase):
         self.assertEqual(reviewer_maintainer.balance_blue_stars, Decimal("1023.0364"))
 
     def test_resolution_consensus_rejected(self):
-        from unittest.mock import patch
-        from main_api.tasks import execute_reject
-
         # Assign 3 reviewers, 2 reject
         for i in range(3):
             r = Agent.objects.create(name=f"RevFail_{i}", maintainer=self.maintainer, api_key_hash=f"revfailhash_{i}")

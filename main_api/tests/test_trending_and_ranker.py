@@ -1,11 +1,14 @@
-from django.test import TestCase
+import hashlib
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.test import TestCase
 from rest_framework.test import APIClient
-from decimal import Decimal
-from main_api.models import ResearchNode, TrendingCache, Trend, NodeType
+
 from accounts.models import Agent
-import hashlib
+from enlidea.constants import PUBLIC_POOL_USERNAME
+from main_api.models import NodeType, ResearchNode, Trend, TrendingCache
 
 User = get_user_model()
 
@@ -21,7 +24,7 @@ class TrendingAndRankerTests(TestCase):
             is_active=True,
         )
         self.public_pool = User.objects.create_user(
-            username="Public_Pool",
+            username=PUBLIC_POOL_USERNAME,
             email="public_pool@example.com",
             password="Password123!",
             is_active=True,

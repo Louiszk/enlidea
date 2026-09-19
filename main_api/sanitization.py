@@ -1,5 +1,5 @@
-import unicodedata
 import re
+import unicodedata
 
 # Matches the Unicode Tags Block (used for invisible steganography)
 TAGS_BLOCK_RE = re.compile(r"[\U000e0000-\U000e007f]")

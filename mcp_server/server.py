@@ -1,16 +1,30 @@
-from typing import Any
-import os
-import logging
+import asyncio
 import json
+import logging
+import os
 from contextlib import asynccontextmanager
-from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError, ResourceError
-from fastmcp.server.dependencies import get_http_headers
-from fastmcp.dependencies import Depends
+from typing import Any
+
 import httpx
+from fastmcp import FastMCP
+from fastmcp.dependencies import Depends
+from fastmcp.exceptions import ResourceError, ToolError
+from fastmcp.server.dependencies import get_http_headers
 from starlette.responses import JSONResponse
 
+from mcp_server.schemas import (
+    BidEvaluationAction,
+    ClaimAction,
+    CoordinatorAction,
+    DirectiveStatus,
+    ReportReason,
+    ReportTargetType,
+    ReviewData,
+    ReviewRecommendation,
+)
+
 logger = logging.getLogger(__name__)
+
 
 # Infrastructure URLs
 BACKEND_BASE_URL = os.getenv("ENLIDEA_BACKEND_URL", "http://backend:8000")
@@ -46,18 +60,6 @@ def require_full_agent(key: str = Depends(get_agent_key)) -> str:
             "Public API keys (pub_enlidea_...) have read-only access. Please use a full Agent API key for write operations."
         )
     return key
-
-
-from mcp_server.schemas import (
-    ReviewData,
-    ReviewRecommendation,
-    ClaimAction,
-    BidEvaluationAction,
-    CoordinatorAction,
-    ReportTargetType,
-    ReportReason,
-    DirectiveStatus,
-)
 
 
 http_client: httpx.AsyncClient | None = None
@@ -125,7 +127,7 @@ async def make_request(
             res_json = response.json()
             if isinstance(res_json, dict) and "detail" in res_json:
                 error_detail = res_json["detail"]
-        except Exception:
+        except (ValueError, TypeError):
             pass
         raise ErrorType(f"Permission denied: {error_detail}")
 
@@ -219,23 +221,23 @@ async def get_capabilities() -> Any:
     return data
 
 
+def _read_skill_mcp_file(file_path: str) -> str:
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 @mcp.resource("enlidea://skill-mcp")
 async def get_skill_mcp() -> str:
     """Get the Model Context Protocol (MCP) skill documentation for Enlidea agents."""
-    import os
-    import httpx
-
     # 1. Read skill-mcp.md from container root volume mount (/app/skill-mcp.md)
     container_mount_path = "/app/skill-mcp.md"
     if os.path.exists(container_mount_path):
-        with open(container_mount_path, "r", encoding="utf-8") as f:
-            return f.read()
+        return await asyncio.to_thread(_read_skill_mcp_file, container_mount_path)
 
     # 2. Read co-located skill-mcp.md inside mcp_server/ directory
     local_mcp_path = os.path.join(os.path.dirname(__file__), "skill-mcp.md")
     if os.path.exists(local_mcp_path):
-        with open(local_mcp_path, "r", encoding="utf-8") as f:
-            return f.read()
+        return await asyncio.to_thread(_read_skill_mcp_file, local_mcp_path)
 
     # 2. Fallback to fetching from frontend container URL
     try:
@@ -244,7 +246,7 @@ async def get_skill_mcp() -> str:
             response.raise_for_status()
             return response.text
     except Exception as e:
-        logger.error(f"Failed to load SKILL-MCP.md: {str(e)}")
+        logger.error(f"Failed to load SKILL-MCP.md: {e!s}")
         return "Failed to load SKILL-MCP.md documentation."
 
 

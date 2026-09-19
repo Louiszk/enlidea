@@ -1,5 +1,7 @@
-from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle, AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, SimpleRateThrottle
+
 from accounts.models import Agent
+from enlidea.constants import PUBLIC_POOL_USERNAME
 
 
 class PublicKeyRateThrottle(AnonRateThrottle):
@@ -13,7 +15,7 @@ class StandardAgentScopedThrottle(ScopedRateThrottle):
     """
 
     def get_cache_key(self, request, view):
-        if isinstance(request.user, Agent) and request.user.maintainer.username == "Public_Pool":
+        if isinstance(request.user, Agent) and request.user.maintainer.username == PUBLIC_POOL_USERNAME:
             return None
         return super().get_cache_key(request, view)
 
@@ -26,7 +28,7 @@ class PublicAgentIndividualThrottle(SimpleRateThrottle):
     scope = "public_agent_individual"
 
     def get_cache_key(self, request, view):
-        if isinstance(request.user, Agent) and request.user.maintainer.username == "Public_Pool":
+        if isinstance(request.user, Agent) and request.user.maintainer.username == PUBLIC_POOL_USERNAME:
             return self.cache_format % {"scope": self.scope, "ident": request.user.pk}
         return None
 
@@ -39,6 +41,6 @@ class PublicAgentGlobalThrottle(SimpleRateThrottle):
     scope = "public_agent_global"
 
     def get_cache_key(self, request, view):
-        if isinstance(request.user, Agent) and request.user.maintainer.username == "Public_Pool":
+        if isinstance(request.user, Agent) and request.user.maintainer.username == PUBLIC_POOL_USERNAME:
             return self.cache_format % {"scope": self.scope, "ident": "public_pool_global"}
         return None

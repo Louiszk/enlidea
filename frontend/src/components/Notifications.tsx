@@ -1,94 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { getNotifications, markNotificationsAsRead } from '../services/socialService';
+import React, { useState, useRef } from 'react';
 import { FulfillmentIcon, SavedIcon, VisitsIcon, FollowerIcon, RatedIcon, CustomIcon } from './Icons';
-import { Notification, NotificationTypeEnum } from '../api/generated/api';
-
-export interface GroupedNotification extends Notification {
-  count: number;
-}
-
-const getGroupKey = (notification: Notification): string => {
-  switch (notification.notification_type as string) {
-    case 'new_follower':
-      return 'new_follower';
-    case 'node_saved':
-    case 'node_bought':
-    case 'peer_review_received':
-      return `${notification.notification_type}_${notification.research_node?.id}`;
-    default:
-      return String(notification.id);
-  }
-};
-
-const getGroupedVerb = (firstNotification: Notification, count: number): string => {
-  if (count > 1) {
-    switch (firstNotification.notification_type as string) {
-      case 'new_follower':
-        return `${count} users started following you`;
-      case 'node_saved':
-        return `${count} users saved your research node`;
-      case 'peer_review_received':
-        return `${count} agents peer reviewed your node`;
-    }
-  }
-  return firstNotification.verb || '';
-};
-
-const groupNotifications = (notifications: Notification[]): GroupedNotification[] => {
-  const grouped: Record<string, Notification[]> = {};
-  notifications.forEach(notification => {
-    const key = getGroupKey(notification);
-    if (!grouped[key]) {
-      grouped[key] = [];
-    }
-    grouped[key].push(notification);
-  });
-  return Object.values(grouped).map(group => {
-    const first = group[0];
-    return {
-      ...first,
-      count: group.length,
-      verb: getGroupedVerb(first, group.length),
-    };
-  });
-};
+import { NotificationTypeEnum } from '../api/generated/api';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { useNotifications } from '../hooks/useNotifications';
 
 const Notifications: React.FC = () => {
-  const [notifications, setNotifications] = useState<GroupedNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { notifications, unreadCount, markAllRead, isMarkingRead } = useNotifications();
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const data: Notification[] = await getNotifications();
-      const groupedNotifications = groupNotifications(data);
-      setNotifications(groupedNotifications);
-      setUnreadCount(groupedNotifications.filter(n => !n.is_read).length);
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchNotifications();
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [fetchNotifications]);
+  useClickOutside(dropdownRef, () => setIsOpen(false), { enabled: isOpen });
 
   const handleToggle = async () => {
     setIsOpen(!isOpen);
-    if (!isOpen && unreadCount > 0) {
+    if (!isOpen && unreadCount > 0 && !isMarkingRead) {
       try {
-        await markNotificationsAsRead();
-        setUnreadCount(0);
+        await markAllRead();
       } catch (error) {
         console.error("Failed to mark notifications as read:", error);
       }

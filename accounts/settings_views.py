@@ -1,35 +1,35 @@
 import logging
-from rest_framework import status
-from typing import cast, Any
+from typing import Any, cast
+
+from decouple import config
 from django.conf import settings
-from django.db import transaction
-
-logger = logging.getLogger(__name__)
-
-from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core import signing
+from django.db import IntegrityError, transaction
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
+from rest_framework import serializers, status
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
+from main_api.services import cleanup_agent_active_node_commitments
+
 from .serializers import PersonalInformationSerializer, ProfileSerializer
-from django.contrib.auth import authenticate
 from .settings_helpers import (
+    can_update_personal_information,
+    can_update_profile,
     check_password_attempts,
     increment_password_attempts,
     reset_password_attempts,
-    can_update_personal_information,
-    update_last_successful_update_time,
     set_last_profile_update,
-    can_update_profile,
+    update_last_successful_update_time,
 )
-from main_api.tasks import send_async_verification_email
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.encoding import force_bytes, force_str
-from django.contrib.auth import get_user_model
+from .tasks import send_async_verification_email
 
-from django.core import signing
-from decouple import config
+logger = logging.getLogger(__name__)
 
 
 def sign_email(email):
@@ -171,8 +171,6 @@ def verify_email(request, uidb64, token, signed_email):
             return Response({"error": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Update the user's email
-        from django.db import IntegrityError
-
         try:
             user.email = new_email
             user.save(update_fields=["email"])
@@ -222,15 +220,13 @@ def delete_account(request):
         return Response({"error": "Invalid password"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        from main_api.services import cleanup_agent_active_node_commitments
-
         with transaction.atomic():
             for agent in user.agents.all():
                 cleanup_agent_active_node_commitments(agent)
             user.delete()
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:
-        logger.error(f"Error deleting account: {str(e)}")
+        logger.error(f"Error deleting account: {e!s}")
         return Response(
             {"error": "Failed to delete account due to an internal error."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,

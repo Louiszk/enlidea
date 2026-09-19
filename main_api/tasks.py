@@ -1,157 +1,36 @@
 import logging
-import random
 import math
+import random
 from datetime import timedelta
-from django.utils import timezone
+from decimal import Decimal
+
+from celery import shared_task
+from celery.exceptions import Retry
+from django.core import management
 from django.db import transaction
 from django.db.models import F
-from celery import shared_task
-from celery.exceptions import Retry, MaxRetriesExceededError
-from decimal import Decimal
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.conf import settings
-from django.contrib.auth import get_user_model
+from django.utils import timezone
+
+from accounts.models import Account, Agent
+from enlidea.constants import (
+    BAN_THRESHOLD_OS,
+    COUNSEL_BS_REWARD,
+    LAMBDA,
+    MIN_OS_PENALTY,
+    PUBLIC_POOL_USERNAME,
+    REVIEWER_BS_REWARD,
+    STAKE_RATE,
+    TAX_RATE,
+    TREASURY_USERNAME,
+)
+from main_api.models import Paper, PeerReview, ResearchNode, Trend
+from social.models import Notification
 
 logger = logging.getLogger(__name__)
-
-# Constants for Tokenomics
-TREASURY_USERNAME = "System_Treasury"
-TAX_RATE = Decimal("0.02")
-STAKE_RATE = Decimal("0.10")
-REVIEWER_BS_REWARD = Decimal("2.0000")
-MIN_OS_PENALTY = Decimal("5.0000")
-BAN_THRESHOLD_OS = Decimal("-20.0000")
-LAMBDA = Decimal("0.02")
-REVISION_FEE = Decimal("5.0000")
-ESCALATION_FEE = Decimal("20.0000")
-COUNSEL_BS_REWARD = Decimal("4.0000")
-
-
-@shared_task(
-    bind=True,
-    max_retries=5,
-    default_retry_delay=5,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-)
-def send_async_activation_email(self, user_id, activation_link):
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.error(f"Failed to send activation email: User {user_id} not found.")
-        return
-
-    try:
-        mail_subject = "Activate your Enlidea account."
-        message = render_to_string(
-            "accounts/account_activation_email.html", {"account": user, "activation_link": activation_link}
-        )
-        send_mail(
-            mail_subject,
-            message,
-            settings.EMAIL_HOST_USER,
-            [user.email],
-            fail_silently=False,
-        )
-        logger.info(f"Activation email sent to {user.email}")
-    except (Retry, MaxRetriesExceededError):
-        raise
-    except Exception as e:
-        logger.error(f"Error sending activation email to user {user_id}: {str(e)}")
-        if self.request.retries >= self.max_retries:
-            logger.critical(
-                f"METRIC email_delivery_failure task=send_async_activation_email user_id={user_id} error={str(e)}"
-            )
-        raise self.retry(exc=e)
-
-
-@shared_task(
-    bind=True,
-    max_retries=5,
-    default_retry_delay=5,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-)
-def send_async_password_reset_email(self, user_id, reset_link):
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.error(f"Failed to send password reset email: User {user_id} not found.")
-        return
-
-    try:
-        mail_subject = "Reset your Enlidea account password."
-        message = render_to_string("accounts/password_reset_email.html", {"account": user, "reset_link": reset_link})
-        send_mail(
-            mail_subject,
-            message,
-            settings.EMAIL_HOST_USER,
-            [user.email],
-            fail_silently=False,
-        )
-        logger.info(f"Password reset email sent to {user.email}")
-    except (Retry, MaxRetriesExceededError):
-        raise
-    except Exception as e:
-        logger.error(f"Error sending password reset email to user {user_id}: {str(e)}")
-        if self.request.retries >= self.max_retries:
-            logger.critical(
-                f"METRIC email_delivery_failure task=send_async_password_reset_email user_id={user_id} error={str(e)}"
-            )
-        raise self.retry(exc=e)
-
-
-@shared_task(
-    bind=True,
-    max_retries=5,
-    default_retry_delay=5,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-)
-def send_async_verification_email(self, user_id, new_email, verification_link):
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.error(f"Failed to send verification email: User {user_id} not found.")
-        return
-
-    try:
-        mail_subject = "Change your Enlidea account email address."
-        message = render_to_string(
-            "accounts/account_change_email.html", {"account": user, "verification_link": verification_link}
-        )
-        send_mail(
-            mail_subject,
-            message,
-            settings.EMAIL_HOST_USER,
-            [new_email],
-            fail_silently=False,
-        )
-        logger.info(f"Email change verification sent to {new_email}")
-    except (Retry, MaxRetriesExceededError):
-        raise
-    except Exception as e:
-        logger.error(f"Error sending verification email for user {user_id}: {str(e)}")
-        if self.request.retries >= self.max_retries:
-            logger.critical(
-                f"METRIC email_delivery_failure task=send_async_verification_email user_id={user_id} error={str(e)}"
-            )
-        raise self.retry(exc=e)
 
 
 @shared_task
 def task_matchmake_node(node_id):
-    from main_api.models import ResearchNode, PeerReview
-    from accounts.models import Agent
-    from social.models import Notification
-
     with transaction.atomic():
         try:
             # Lock the node to prevent concurrent matchmaking
@@ -206,7 +85,7 @@ def task_matchmake_node(node_id):
 
         base_eligible = (
             Agent.objects.filter(is_active=True)
-            .exclude(maintainer__username="Public_Pool")
+            .exclude(maintainer__username=PUBLIC_POOL_USERNAME)
             .exclude(maintainer__username=TREASURY_USERNAME)
             .exclude(maintainer_id__in=involved_maintainer_ids)
             .exclude(id__in=excluded_agents)
@@ -275,10 +154,6 @@ def task_matchmake_node(node_id):
 
 @shared_task
 def task_matchmake_counsel(node_id):
-    from main_api.models import ResearchNode, PeerReview
-    from accounts.models import Agent
-    from social.models import Notification
-
     with transaction.atomic():
         try:
             node = ResearchNode.objects.select_for_update().get(
@@ -331,7 +206,7 @@ def task_matchmake_counsel(node_id):
         # Filter base for active, non-involved agents
         base_query = (
             Agent.objects.filter(is_active=True)
-            .exclude(maintainer__username="Public_Pool")
+            .exclude(maintainer__username=PUBLIC_POOL_USERNAME)
             .exclude(maintainer__username=TREASURY_USERNAME)
             .exclude(maintainer_id__in=involved_maintainer_ids)
             .exclude(id__in=excluded_agents)
@@ -376,10 +251,6 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
     Handles Blue Star fees and Orange Star bonus/slashing for reviewers of a specific round.
     ground_truth: boolean (True if consensus/counsel eventually accepted the node).
     """
-    from main_api.models import PeerReview
-    from accounts.models import Agent, Account
-    from social.models import Notification
-
     # 1. Fetch reviewers for this specific round
     reviews = PeerReview.objects.filter(
         research_node=node, round_number=round_number, status="completed"
@@ -458,10 +329,6 @@ def process_reviewer_rewards(node, round_number, is_approved_ground_truth):
 
 
 def execute_publish(node):
-    from main_api.models import ResearchNode, Paper, Trend
-    from accounts.models import Agent, Account
-    from social.models import Notification
-
     with transaction.atomic():
         locked_node = ResearchNode.objects.select_for_update().get(id=node.id)
         if locked_node.status == "published":
@@ -476,8 +343,8 @@ def execute_publish(node):
         try:
             trend, _ = Trend.objects.get_or_create(research_node=node)
             trend.update_metrics(fulfillments=1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to update fulfillment trend metrics for node %s: %s", node.id, e)
 
         # 3. CREATE PAPER
         fulfilling_agents = node.assigned_agents.all().order_by("id")
@@ -505,7 +372,7 @@ def execute_publish(node):
             base_pool = net_bounty * Decimal("0.80")
             merit_pool = net_bounty * Decimal("0.20")
 
-            total_orange_stars = sum(max(Decimal("0"), agent.orange_stars) for agent in fulfilling_agents)
+            total_orange_stars = sum(max(Decimal(0), agent.orange_stars) for agent in fulfilling_agents)
 
             # Worker OS Reward: log_1.5(max(bounty, 1)) but at least 1.0
             worker_os_raw = math.log(max(float(node.bounty_amount), 1.0), 1.5)
@@ -514,7 +381,7 @@ def execute_publish(node):
             for agent in fulfilling_agents:
                 agent_share = base_pool / agent_count
                 if total_orange_stars > 0:
-                    agent_os = max(Decimal("0"), agent.orange_stars)
+                    agent_os = max(Decimal(0), agent.orange_stars)
                     agent_share += merit_pool * (agent_os / total_orange_stars)
                 else:
                     agent_share += merit_pool / agent_count
@@ -536,10 +403,6 @@ def execute_publish(node):
 
 
 def execute_reject(node):
-    from main_api.models import ResearchNode
-    from accounts.models import Agent, Account
-    from social.models import Notification
-
     with transaction.atomic():
         locked_node = ResearchNode.objects.select_for_update().get(id=node.id)
         if locked_node.status == "rejected":
@@ -553,7 +416,7 @@ def execute_reject(node):
         ResearchNode.objects.filter(id=node.id).update(status="rejected", updated=timezone.now())
 
     if node.coordinating_agent:
-        refund_amount = max(Decimal("0"), node.bounty_amount - node.forfeited_bounty)
+        refund_amount = max(Decimal(0), node.bounty_amount - node.forfeited_bounty)
         Account.objects.filter(id=node.coordinating_agent.maintainer_id).update(
             balance_blue_stars=F("balance_blue_stars") + refund_amount, updated_at=timezone.now()
         )
@@ -599,9 +462,6 @@ def execute_reject(node):
     retry_jitter=True,
 )
 def task_resolve_node(self, node_id):
-    from main_api.models import ResearchNode
-    from social.models import Notification
-
     try:
         with transaction.atomic():
             try:
@@ -704,14 +564,12 @@ def task_resolve_node(self, node_id):
     except Retry:
         raise
     except Exception as e:
-        logger.error(f"Error resolving Node {node_id}: {str(e)}")
+        logger.error(f"Error resolving Node {node_id}: {e!s}")
         raise self.retry(exc=e)
 
 
 @shared_task(bind=True, max_retries=None)
 def task_auto_resolve_coordinator_decision(self, node_id):
-    from main_api.models import ResearchNode
-
     with transaction.atomic():
         try:
             node = ResearchNode.objects.select_for_update().get(id=node_id, status="awaiting_coordinator")
@@ -738,10 +596,6 @@ def task_auto_resolve_coordinator_decision(self, node_id):
     retry_jitter=True,
 )
 def task_handle_node_deadline(self, node_id):
-    from main_api.models import ResearchNode
-    from accounts.models import Agent, Account
-    from social.models import Notification
-
     try:
         with transaction.atomic():
             # Lock the row and check status
@@ -762,7 +616,7 @@ def task_handle_node_deadline(self, node_id):
             # 1. Refund remaining bounty to the coordinator
             if node.coordinating_agent:
                 maintainer = node.coordinating_agent.maintainer
-                refund_amount = max(Decimal("0"), node.bounty_amount - node.forfeited_bounty)
+                refund_amount = max(Decimal(0), node.bounty_amount - node.forfeited_bounty)
 
                 Account.objects.filter(id=maintainer.id).update(
                     balance_blue_stars=F("balance_blue_stars") + refund_amount
@@ -845,14 +699,12 @@ def task_handle_node_deadline(self, node_id):
     except Retry:
         raise
     except Exception as e:
-        logger.error(f"Error handling deadline for Node {node_id}: {str(e)}")
+        logger.error(f"Error handling deadline for Node {node_id}: {e!s}")
         raise self.retry(exc=e)
 
 
 @shared_task
 def task_sweep_deadlines():
-    from main_api.models import ResearchNode
-
     # Find nodes that missed their deadline by more than 2 minutes and are still open/in_progress
     expired_nodes = ResearchNode.objects.filter(
         status__in=["open", "in_progress"], deadline__lt=timezone.now() - timedelta(minutes=2)
@@ -870,9 +722,6 @@ def task_sweep_deadlines():
     retry_jitter=True,
 )
 def task_sweep_stale_reviews(self):
-    from main_api.models import PeerReview
-    from main_api.tasks import task_matchmake_node
-
     try:
         now = timezone.now()
         pending_timeout = now - timedelta(minutes=30)
@@ -899,11 +748,8 @@ def task_sweep_stale_reviews(self):
                     .values_list("research_node_id", flat=True)
                     .distinct()
                 )
-                from main_api.models import ResearchNode
 
-                locked_nodes = list(
-                    ResearchNode.objects.select_for_update().filter(id__in=affected_node_ids).order_by("id")
-                )
+                _ = list(ResearchNode.objects.select_for_update().filter(id__in=affected_node_ids).order_by("id"))
 
                 # Step 3: Now lock the specific stale reviews
                 stale_pending = list(
@@ -920,9 +766,6 @@ def task_sweep_stale_reviews(self):
 
                 # Penalty for claim hoarding
                 if stale_claimed:
-                    from accounts.models import Agent
-                    from social.models import Notification
-
                     for review in stale_claimed:
                         agent_id = review.assigned_reviewer_id
                         penalty = Decimal("2.0000")
@@ -954,9 +797,6 @@ def task_sweep_stale_reviews(self):
                 PeerReview.objects.filter(id__in=[r.id for r in stale_reviews]).delete()
 
                 # Query the affected nodes to route them to the correct matchmaker
-                from main_api.models import ResearchNode
-                from main_api.tasks import task_matchmake_counsel
-
                 nodes = ResearchNode.objects.filter(id__in=affected_node_ids).values("id", "escalated_to_counsel")
                 for node in nodes:
                     if node["escalated_to_counsel"]:
@@ -975,15 +815,12 @@ def task_sweep_stale_reviews(self):
     except Retry:
         raise
     except Exception as e:
-        logger.error(f"Error sweeping stale reviews: {str(e)}")
+        logger.error(f"Error sweeping stale reviews: {e!s}")
         raise self.retry(exc=e)
 
 
 @shared_task
 def task_fill_counsel_shortages():
-    from main_api.models import ResearchNode
-    from main_api.tasks import task_matchmake_counsel
-
     counsel_nodes = ResearchNode.objects.filter(status="in_review", escalated_to_counsel=True)
     for node in counsel_nodes:
         firm_reviews = node.reviews.filter(
@@ -1004,15 +841,13 @@ def task_fill_counsel_shortages():
     retry_jitter=True,
 )
 def task_flush_expired_tokens(self):
-    from django.core.management import call_command
-
     try:
-        call_command("flushexpiredtokens")
+        management.call_command("flushexpiredtokens")
         logger.info("Successfully flushed expired SimpleJWT tokens.")
     except Retry:
         raise
     except Exception as e:
-        logger.error(f"Error flushing expired tokens: {str(e)}")
+        logger.error(f"Error flushing expired tokens: {e!s}")
         if getattr(self.request, "id", None):
             raise self.retry(exc=e)
 
@@ -1025,8 +860,6 @@ def task_flush_expired_tokens(self):
     retry_jitter=True,
 )
 def task_clean_anon_agents(self):
-    from accounts.models import Agent
-
     cutoff = timezone.now() - timedelta(hours=24)
     try:
         deleted_count, _ = Agent.objects.filter(name__startswith="Anon_", created_at__lt=cutoff).delete()
@@ -1035,7 +868,7 @@ def task_clean_anon_agents(self):
     except Retry:
         raise
     except Exception as e:
-        logger.error(f"Error cleaning stale Anon_ agents: {str(e)}")
+        logger.error(f"Error cleaning stale Anon_ agents: {e!s}")
         if getattr(self.request, "id", None):
             raise self.retry(exc=e)
 
@@ -1048,15 +881,13 @@ def task_clean_anon_agents(self):
     retry_jitter=True,
 )
 def task_update_trending_cache(self):
-    from django.core.management import call_command
-
     try:
-        call_command("trendsetter")
+        management.call_command("trendsetter")
         logger.info("Successfully updated trending cache.")
     except Retry:
         raise
     except Exception as e:
-        logger.error(f"Error updating trending cache: {str(e)}")
+        logger.error(f"Error updating trending cache: {e!s}")
         if getattr(self.request, "id", None):
             raise self.retry(exc=e)
 
@@ -1069,14 +900,12 @@ def task_update_trending_cache(self):
     retry_jitter=True,
 )
 def task_update_user_ranks(self):
-    from django.core.management import call_command
-
     try:
-        call_command("ranker")
+        management.call_command("ranker")
         logger.info("Successfully updated maintainer ranks and scores.")
     except Retry:
         raise
     except Exception as e:
-        logger.error(f"Error updating user ranks: {str(e)}")
+        logger.error(f"Error updating user ranks: {e!s}")
         if getattr(self.request, "id", None):
             raise self.retry(exc=e)

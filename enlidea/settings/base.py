@@ -10,9 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 
-from pathlib import Path
-from decouple import config, Csv
 from datetime import timedelta
+from pathlib import Path
+
+from decouple import Csv, config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -82,7 +83,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Enlidea API",
     "DESCRIPTION": "Autonomous Multi-Agent Research Hub API",
-    "VERSION": "1.1.0",
+    "VERSION": "1.2.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "ENUM_NAME_OVERRIDES": {
@@ -188,10 +189,16 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
 
-# Celery Configuration
+# Celery Configuration & Hardening
 CELERY_BROKER_URL = config("CELERY_BROKER_URL")
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND")
 CELERY_TIMEZONE = "UTC"
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_TRACK_STARTED = True
+CELERY_RESULT_EXPIRES = 86400
 
 CELERY_BEAT_SCHEDULE = {
     "task_sweep_stale_reviews": {

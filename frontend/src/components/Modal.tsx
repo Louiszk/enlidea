@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -10,23 +11,14 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
+  useClickOutside(modalRef, onClose, { enabled: isOpen });
 
+  useEffect(() => {
     if (isOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
       setTimeout(() => setIsVisible(true), 10);
     } else {
       setIsVisible(false);
     }
-
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;

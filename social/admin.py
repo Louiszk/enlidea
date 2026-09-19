@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from .models import Notification, Appreciation, Report, Complaint
+
+from .models import Appreciation, Complaint, Notification, Report
 
 User = get_user_model()
 

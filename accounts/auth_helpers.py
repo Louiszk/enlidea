@@ -1,5 +1,5 @@
-from django.core.cache import cache
 from django.conf import settings
+from django.core.cache import cache
 
 MAX_LOGIN_ATTEMPTS = getattr(settings, "MAX_LOGIN_ATTEMPTS", 5)
 LOGIN_ATTEMPT_TIMEOUT = getattr(settings, "LOGIN_ATTEMPT_TIMEOUT", 43200)
@@ -26,10 +26,7 @@ def get_login_cache_key(request, identifier=None):
 def check_login_attempts(request, identifier=None):
     cache_key = get_login_cache_key(request, identifier)
     login_attempts = cache.get(cache_key, 0)
-
-    if login_attempts >= MAX_LOGIN_ATTEMPTS:
-        return False
-    return True
+    return login_attempts < MAX_LOGIN_ATTEMPTS
 
 
 def increment_login_attempts(request, identifier=None):

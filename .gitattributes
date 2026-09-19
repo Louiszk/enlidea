@@ -1,0 +1,7 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Enforce LF line endings for schema files, YAML configs, and shell scripts
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf

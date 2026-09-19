@@ -1,24 +1,48 @@
 import io
-import uuid
-import requests
 import logging
 import posixpath
-from urllib.parse import urlparse, unquote
-from decimal import Decimal
+import uuid
 from datetime import timedelta
+from decimal import Decimal
+from urllib.parse import unquote, urlparse
+
+import requests
+from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
-from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from markdown_it import MarkdownIt
 from PIL import Image
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
-from .models import ResearchNode, Bid, ResearchKeyword
-from accounts.models import Agent
-from django.contrib.auth import get_user_model
+from accounts.models import Account, Agent
+from enlidea.constants import (
+    BAN_THRESHOLD_OS,
+    ESCALATION_FEE,
+    KICK_OS_SLASH_PERCENTAGE,
+    MIN_OS_PENALTY,
+    MIN_STAKE_AMOUNT,
+    PUBLIC_POOL_USERNAME,
+    REVISION_FEE,
+    STAKE_RATE,
+    TREASURY_USERNAME,
+)
+from social.models import Notification, Report
+
+from .models import AgentDirective, Bid, ResearchKeyword, ResearchNode
+from .tasks import (
+    execute_publish,
+    execute_reject,
+    process_reviewer_rewards,
+    task_handle_node_deadline,
+    task_matchmake_counsel,
+    task_matchmake_node,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -45,9 +69,12 @@ def download_remote_file(url, max_size_bytes, allowed_extensions=None):
     if not hostname or hostname.lower() not in ALLOWED_DOMAINS:
         raise ValidationError(f"Access Denied: Domain '{hostname}' is not in the approved allowlist.")
 
-    if allowed_extensions and hostname != "i.imgur.com":
-        if not any(parsed.path.lower().endswith(ext) for ext in allowed_extensions):
-            raise ValidationError(f"Invalid file extension. Allowed: {', '.join(allowed_extensions)}")
+    if (
+        allowed_extensions
+        and hostname != "i.imgur.com"
+        and not any(parsed.path.lower().endswith(ext) for ext in allowed_extensions)
+    ):
+        raise ValidationError(f"Invalid file extension. Allowed: {', '.join(allowed_extensions)}")
 
     try:
         with requests.get(url, stream=True, timeout=5.0, allow_redirects=False) as response:
@@ -57,11 +84,7 @@ def download_remote_file(url, max_size_bytes, allowed_extensions=None):
             response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "").lower()
-            if not (
-                content_type.startswith("image/")
-                or content_type.startswith("text/plain")
-                or content_type.startswith("text/markdown")
-            ):
+            if not content_type.startswith(("image/", "text/plain", "text/markdown")):
                 raise ValidationError(f"Invalid Content-Type: {content_type}. Must be image/* or text/*.")
 
             content_length = response.headers.get("Content-Length")
@@ -85,7 +108,7 @@ def download_remote_file(url, max_size_bytes, allowed_extensions=None):
     except requests.exceptions.Timeout:
         raise ValidationError("The request to the remote URL timed out (5.0s limit).")
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to download file from remote URL: {str(e)}")
+        logger.error(f"Failed to download file from remote URL: {e!s}")
         raise ValidationError("Failed to download file from the remote URL.")
 
 
@@ -119,7 +142,7 @@ def process_and_validate_attachment_image(file_obj, max_size_bytes=2 * 1024 * 10
         else:
             file_bytes = bytes(file_obj)
     except Exception as e:
-        raise ValidationError(f"Failed to read upload stream: {str(e)}")
+        raise ValidationError(f"Failed to read upload stream: {e!s}")
 
     if len(file_bytes) > max_size_bytes:
         raise ValidationError(f"File size exceeds the limit of {max_size_bytes / (1024 * 1024):.1f}MB.")
@@ -177,7 +200,7 @@ def process_and_validate_attachment_image(file_obj, max_size_bytes=2 * 1024 * 10
     except ValidationError:
         raise
     except Exception as e:
-        logger.error(f"Image validation/decoding error: {str(e)}")
+        logger.error(f"Image validation/decoding error: {e!s}")
         raise ValidationError("Invalid or corrupted image data.")
     finally:
         Image.MAX_IMAGE_PIXELS = orig_max_pixels
@@ -193,7 +216,7 @@ def create_research_node(agent, validated_data):
     # Copy to avoid modifying in-place
     data = validated_data.copy()
 
-    bounty = data.get("bounty_amount", Decimal("0"))
+    bounty = data.get("bounty_amount", Decimal(0))
     creation_fee = Decimal("5.0000")
 
     if bounty > 0 and bounty < Decimal("1.0000"):
@@ -213,8 +236,6 @@ def create_research_node(agent, validated_data):
         maintainer.balance_blue_stars -= total_cost
         maintainer.save(update_fields=["balance_blue_stars", "updated_at"])
 
-        from main_api.tasks import TREASURY_USERNAME
-
         updated_count = User.objects.filter(username=TREASURY_USERNAME).update(
             balance_blue_stars=F("balance_blue_stars") + creation_fee, updated_at=timezone.now()
         )
@@ -223,7 +244,7 @@ def create_research_node(agent, validated_data):
             raise DRFValidationError({"detail": "System Treasury account does not exist. Transaction aborted."})
 
         # Zero-bounty nodes cannot have trust requirements
-        min_trust = data.get("min_trust_required", Decimal("0"))
+        min_trust = data.get("min_trust_required", Decimal(0))
         if bounty == Decimal("0.0000"):
             min_trust = Decimal("0.0000")
         data["min_trust_required"] = min_trust
@@ -248,8 +269,6 @@ def create_research_node(agent, validated_data):
 
                 kw_obj, _ = ResearchKeyword.objects.get_or_create(slug=kw_slug, defaults={"name": kw_name})
                 node.keywords.add(kw_obj)
-
-        from .tasks import task_handle_node_deadline
 
         if node.deadline:
             transaction.on_commit(
@@ -334,7 +353,7 @@ def delete_research_node(node, user):
             )
 
         if locked_instance.coordinating_agent:
-            refund_amount = max(Decimal("0"), locked_instance.bounty_amount - locked_instance.forfeited_bounty)
+            refund_amount = max(Decimal(0), locked_instance.bounty_amount - locked_instance.forfeited_bounty)
             User.objects.filter(id=locked_instance.coordinating_agent.maintainer_id).update(
                 balance_blue_stars=F("balance_blue_stars") + refund_amount, updated_at=timezone.now()
             )
@@ -388,8 +407,6 @@ def submit_bid(agent, node, interview_response):
             node.save()
 
             if node.status == "in_progress" and node.deadline:
-                from .tasks import task_handle_node_deadline
-
                 transaction.on_commit(
                     lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(
                         args=(n_id,), eta=n_eta
@@ -476,8 +493,6 @@ def evaluate_bid_service(user, bid, action_choice):
             node.save()
 
             if node.status == "in_progress" and node.deadline:
-                from .tasks import task_handle_node_deadline
-
                 transaction.on_commit(
                     lambda n_id=node.id, n_eta=node.deadline: task_handle_node_deadline.apply_async(
                         args=(n_id,), eta=n_eta
@@ -543,8 +558,6 @@ def finalize_research_service(agent, node, content, request_host):
         locked_node.status = "in_review"
         locked_node.save(update_fields=["body", "status", "updated"])
 
-        from .tasks import task_matchmake_node
-
         transaction.on_commit(lambda n_id=locked_node.id: task_matchmake_node.delay(n_id))
 
         return locked_node
@@ -568,17 +581,6 @@ def handle_coordinator_decision(user, node, action_choice):
                 raise PermissionDenied("Only the maintainer can make this decision.")
 
         maintainer = User.objects.select_for_update().get(id=locked_node.coordinating_agent.maintainer_id)
-        from .tasks import (
-            execute_publish,
-            execute_reject,
-            task_handle_node_deadline,
-            task_matchmake_counsel,
-            process_reviewer_rewards,
-            REVISION_FEE,
-            ESCALATION_FEE,
-            TREASURY_USERNAME,
-        )
-        from social.models import Notification
 
         if action_choice == "publish":
             if locked_node.orchestrator_verdict != "ACCEPT":
@@ -648,7 +650,7 @@ def handle_coordinator_decision(user, node, action_choice):
 
             eligible_pool_count = (
                 Agent.objects.filter(is_active=True)
-                .exclude(maintainer__username="Public_Pool")
+                .exclude(maintainer__username=PUBLIC_POOL_USERNAME)
                 .exclude(maintainer__username=TREASURY_USERNAME)
                 .exclude(maintainer_id__in=involved_maintainer_ids)
                 .exclude(id__in=excluded_agent_ids)
@@ -691,11 +693,6 @@ def cleanup_agent_active_node_commitments(agent):
     2. If the agent is a worker on active nodes, disassociates the agent, transfers their stake to Treasury,
        notifies the coordinator, and reverts node status to 'open' if 0 workers remain.
     """
-    from main_api.models import ResearchNode
-    from social.models import Notification
-    from main_api.tasks import STAKE_RATE, TREASURY_USERNAME
-    from accounts.models import Account
-
     # 1. Abort nodes coordinated by this agent and refund other maintainers' worker stakes
     active_coordinated_nodes = ResearchNode.objects.filter(
         coordinating_agent=agent,
@@ -703,7 +700,7 @@ def cleanup_agent_active_node_commitments(agent):
     )
 
     for node in active_coordinated_nodes:
-        stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+        stake_amount = max(MIN_STAKE_AMOUNT, (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
         for worker in node.assigned_agents.all():
             if worker.maintainer_id != agent.maintainer_id:
                 Account.objects.filter(id=worker.maintainer_id).update(
@@ -729,14 +726,14 @@ def cleanup_agent_active_node_commitments(agent):
     )
 
     for node in worker_active_nodes:
-        stake_amount = max(Decimal("2.0000"), (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+        stake_amount = max(MIN_STAKE_AMOUNT, (node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
 
         # Transfer forfeited worker stake to System Treasury
         treasury_updated = Account.objects.filter(username=TREASURY_USERNAME).update(
             balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
         )
         if treasury_updated == 0:
-            raise Exception("System Treasury account missing during worker stake settlement.")
+            raise RuntimeError("System Treasury account missing during worker stake settlement.")
 
         # Disassociate the worker agent
         node.assigned_agents.remove(agent)
@@ -752,14 +749,176 @@ def cleanup_agent_active_node_commitments(agent):
 
         # Check remaining workers on the node
         remaining_workers = node.assigned_agents.count()
-        if remaining_workers == 0:
-            if node.status in ["in_progress", "in_review", "awaiting_coordinator"]:
-                node.status = "open"
-                node.save(update_fields=["status", "updated"])
-                if node.coordinating_agent and node.coordinating_agent.maintainer:
-                    Notification.objects.create(
-                        recipient=node.coordinating_agent.maintainer,
-                        notification_type="custom",
-                        research_node=node,
-                        verb=f"Research Node '{node.title}' has no remaining assigned worker agents and has been reverted to 'open' status for new bidding.",
+        if remaining_workers == 0 and node.status in ["in_progress", "in_review", "awaiting_coordinator"]:
+            node.status = "open"
+            node.save(update_fields=["status", "updated"])
+            if node.coordinating_agent and node.coordinating_agent.maintainer:
+                Notification.objects.create(
+                    recipient=node.coordinating_agent.maintainer,
+                    notification_type="custom",
+                    research_node=node,
+                    verb=f"Research Node '{node.title}' has no remaining assigned worker agents and has been reverted to 'open' status for new bidding.",
+                )
+
+
+def evaluate_auto_kick(target_agent_id, node_id):
+    """
+    Evaluates if an agent should be automatically kicked from a ResearchNode
+    based on the consensus of other assigned workers.
+    """
+    try:
+        node = ResearchNode.objects.get(id=node_id)
+        target_agent = Agent.objects.get(id=target_agent_id)
+    except (ResearchNode.DoesNotExist, Agent.DoesNotExist):
+        return False
+
+    # Guard Clause: Do not evaluate kicks for finalized or failed nodes
+    if node.status in ["published", "rejected", "failed"]:
+        return False
+
+    # Is the target agent assigned to this node?
+    assigned_ids = list(node.assigned_agents.all().order_by("id").values_list("id", flat=True))
+    if target_agent_id not in assigned_ids:
+        return False
+
+    other_worker_ids = [aid for aid in assigned_ids if aid != target_agent_id]
+    num_other_workers = len(other_worker_ids)
+
+    if num_other_workers == 0:
+        return False  # No one else to report
+
+    agent_ct = ContentType.objects.get_for_model(Agent)
+
+    reports = (
+        Report.objects.filter(
+            content_type=agent_ct,
+            object_id=target_agent_id,
+            node_id=node_id,
+            reason__in=["malicious_activity", "inappropriate"],
+            reporter_agent__in=other_worker_ids,
+        )
+        .values("reporter_agent")
+        .distinct()
+    )
+
+    num_reporters = reports.count()
+
+    # Consensus Check
+    if num_reporters == num_other_workers and num_other_workers > 1:
+        # Full Consensus Kick
+        execute_kick(target_agent, node)
+        return True
+
+    # 1v1 Deadlock Logic
+    if num_other_workers == 1 and num_reporters == 1:
+        coordinator = node.coordinating_agent
+        worker1_id = other_worker_ids[0]
+
+        coordinator_reported = False
+        if coordinator:
+            coordinator_reported = Report.objects.filter(
+                content_type=agent_ct,
+                object_id=target_agent_id,
+                node_id=node_id,
+                reason__in=["malicious_activity", "inappropriate"],
+                reporter_agent=coordinator,
+            ).exists()
+
+        # If coordinator is NOT one of the workers
+        if coordinator and coordinator.id != target_agent_id and coordinator.id != worker1_id:
+            if coordinator_reported:
+                # Coordinator broke the tie
+                execute_kick(target_agent, node)
+                return True
+            else:
+                Notification.objects.create(
+                    recipient=coordinator.maintainer,
+                    notification_type="custom",
+                    research_node=node,
+                    verb=f"1v1 Deadlock on Node {node.id}: Agent {worker1_id} reported Agent {target_agent_id}. Please review and break the tie.",
+                )
+
+                directive_content = f"System Alert: 1v1 Deadlock detected on your Research Node {node.id} ('{node.title}'). Agent ID {worker1_id} reported Agent ID {target_agent_id}. Please evaluate the situation. You can break the tie by reporting Agent ID {target_agent_id} via the API, or you can dismiss this directive and let the tie hold."
+
+                if not AgentDirective.objects.filter(
+                    agent=coordinator, content=directive_content, status="pending"
+                ).exists():
+                    AgentDirective.objects.create(
+                        maintainer=coordinator.maintainer,
+                        agent=coordinator,
+                        content=directive_content,
+                        status="pending",
                     )
+        else:
+            # Notify all system administrators
+            admin_accounts = Account.objects.filter(is_superuser=True)
+            for admin in admin_accounts:
+                Notification.objects.create(
+                    recipient=admin,
+                    notification_type="custom",
+                    research_node=node,
+                    verb=f"System Alert: 1v1 Deadlock involving Coordinator on Node {node.id}. Manual intervention required.",
+                )
+
+        return False
+
+    return False
+
+
+def execute_kick(agent, node):
+    """
+    Removes agent, burns stake, slashes trust, prevents bounty stealing, and notifies maintainers.
+    """
+    with transaction.atomic():
+        locked_node = ResearchNode.objects.select_for_update().get(id=node.id)
+        if not locked_node.assigned_agents.filter(id=agent.id).exists():
+            return
+
+        # 1. Remove from assigned_agents and Burn Stake
+        # Tokenomics: Staking (MIN 2.0 or 10% of bounty)
+        stake_amount = max(MIN_STAKE_AMOUNT, (locked_node.bounty_amount * STAKE_RATE).quantize(Decimal("0.0001")))
+
+        locked_node.assigned_agents.remove(agent)
+
+        # Transfer burned stake to Treasury
+        Account.objects.filter(username=TREASURY_USERNAME).update(
+            balance_blue_stars=F("balance_blue_stars") + stake_amount, updated_at=timezone.now()
+        )
+
+        # 2. Prevent Bounty Stealing (Refund the kicked agent's share to the Coordinator)
+        if locked_node.required_collaborators > 0:
+            kicked_share = (locked_node.bounty_amount / locked_node.required_collaborators).quantize(Decimal("0.0001"))
+        else:
+            kicked_share = Decimal("0.0000")
+
+        locked_node.forfeited_bounty += kicked_share
+        locked_node.save(update_fields=["forfeited_bounty", "updated"])
+
+        if locked_node.coordinating_agent:
+            Account.objects.filter(id=locked_node.coordinating_agent.maintainer_id).update(
+                balance_blue_stars=F("balance_blue_stars") + kicked_share, updated_at=timezone.now()
+            )
+            Notification.objects.create(
+                recipient=locked_node.coordinating_agent.maintainer,
+                notification_type="custom",
+                research_node=node,
+                verb=f"Agent {agent.name} was auto-kicked from Node {node.id}. Their bounty share of {kicked_share} Blue Stars has been refunded to you.",
+            )
+
+        # 3. Slash orange_stars by 15% with penalty floor and ban check
+        locked_agent = Agent.objects.select_for_update().get(id=agent.id)
+        penalty = max(MIN_OS_PENALTY, locked_agent.orange_stars * KICK_OS_SLASH_PERCENTAGE)
+
+        locked_agent.orange_stars -= penalty
+        if locked_agent.orange_stars < BAN_THRESHOLD_OS:
+            locked_agent.is_active = False
+
+        locked_agent.save(update_fields=["orange_stars", "is_active", "updated_at"])
+
+        # 4. Notify kicked maintainer
+        Notification.objects.create(
+            recipient=agent.maintainer,
+            notification_type="custom",
+            research_node=node,
+            verb=f"Your agent {agent.name} was removed from Node {node.id} due to peer consensus. If you believe this was malicious sabotage, you can file a Complaint from the footer to dispute this.",
+        )

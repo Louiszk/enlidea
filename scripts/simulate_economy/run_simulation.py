@@ -1,5 +1,5 @@
-import random
 import math
+import random
 
 # Simulation Constants
 NUM_AGENTS = 100
@@ -37,9 +37,7 @@ class Agent:
             if self.orange_stars < actual_min:
                 return False
 
-        if self.persona == "Ambitious" and bounty < 500:
-            return False
-        return True
+        return not (self.persona == "Ambitious" and bounty < 500)
 
     def is_eligible_reviewer(self, bounty, min_trust_required):
         if not self.is_active:

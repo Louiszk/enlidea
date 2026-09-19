@@ -1,31 +1,35 @@
 import logging
+from decimal import Decimal
+from typing import Any, cast
+
 from django.conf import settings
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.views.decorators.csrf import ensure_csrf_cookie
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from enlidea.constants import SIGNUP_BONUS_BS, TREASURY_USERNAME
+
+from .auth_helpers import check_login_attempts, get_remaining_attempts, increment_login_attempts, reset_login_attempts
+from .authentication import CookieJWTAuthentication, enforce_csrf
+from .models import validate_username
+from .serializers import AccountSerializer, EmailSerializer, PasswordResetConfirmSerializer, PasswordSerializer
+from .tasks import send_async_activation_email, send_async_password_reset_email
+from .throttling import UsernameCheckThrottle
 
 logger = logging.getLogger(__name__)
-
-from main_api.tasks import send_async_activation_email, send_async_password_reset_email
-from django.core.cache import cache
-from typing import Any, cast
-from django.utils import timezone
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from django.contrib.auth import get_user_model, authenticate
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.encoding import force_bytes, force_str
-from django.core.exceptions import ValidationError
-from .serializers import AccountSerializer, EmailSerializer, PasswordResetConfirmSerializer, PasswordSerializer
-from .models import validate_username
-from .authentication import CookieJWTAuthentication, enforce_csrf
-from .throttling import UsernameCheckThrottle
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
-from django.db import transaction, IntegrityError
-from .auth_helpers import check_login_attempts, increment_login_attempts, reset_login_attempts, get_remaining_attempts
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
-from rest_framework import serializers
 
 
 # VERIFICATION EMAIL
@@ -211,12 +215,9 @@ def activate_account(request, uidb64, token):
                 user.is_active = True
 
                 # Tokenomics: Closed-loop signup bonus (if Treasury allows)
-                from main_api.tasks import TREASURY_USERNAME
-                from decimal import Decimal
-
                 try:
                     treasury_acc = get_user_model().objects.select_for_update().get(username=TREASURY_USERNAME)
-                    signup_bonus = Decimal("100.0000")
+                    signup_bonus = SIGNUP_BONUS_BS
 
                     if treasury_acc.balance_blue_stars >= signup_bonus:
                         treasury_acc.balance_blue_stars -= signup_bonus
@@ -364,9 +365,8 @@ def resend_activation(request):
         User = get_user_model()
         try:
             user = User.objects.get(email=email, is_active=False)
-            if can_send_verification_email(user.id):
-                if send_activation_email(request, user):
-                    set_verification_email_sent(user.id)
+            if can_send_verification_email(user.id) and send_activation_email(request, user):
+                set_verification_email_sent(user.id)
         except User.DoesNotExist:
             pass
         return Response(
@@ -397,9 +397,8 @@ def password_reset(request):
         User = get_user_model()
         try:
             user = User.objects.get(email=email)
-            if can_send_password_reset_email(user.id):
-                if send_password_reset_email(request, user):
-                    set_password_reset_email_sent(user.id)
+            if can_send_password_reset_email(user.id) and send_password_reset_email(request, user):
+                set_password_reset_email_sent(user.id)
         except User.DoesNotExist:
             pass
         return Response(
@@ -490,9 +489,6 @@ def logout_view(request):
     response.delete_cookie("access", path="/")
     response.delete_cookie("refresh", path="/")
     return response
-
-
-from django.views.decorators.csrf import ensure_csrf_cookie
 
 
 @extend_schema(

@@ -1,9 +1,11 @@
-from typing import cast, Any
 import hashlib
+from typing import Any, cast
+
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
+
 from accounts.models import Agent
 from main_api.models import AgentDirective
 
@@ -56,7 +58,7 @@ class AgentDirectiveTests(APITestCase):
 
     def test_agent_can_sync_pending_directives(self):
         # Issue a directive
-        directive = AgentDirective.objects.create(
+        AgentDirective.objects.create(
             maintainer=self.maintainer, agent=self.agent, content="Test task", status="pending"
         )
 

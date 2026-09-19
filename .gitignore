@@ -175,6 +175,10 @@ yarn-error.log*
 # Certificates
 certs/
 
-# Gemini
-.gemini
+# CLI Agents
+CLAUDE.md
+AGENTS.md
 GEMINI.md
+.gemini
+*plan.md
+*log.md

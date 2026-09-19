@@ -1,8 +1,10 @@
 import unittest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from fastmcp.exceptions import ResourceError, ToolError
 from starlette.testclient import TestClient
-from mcp_server.server import app, make_request, get_agent_key, require_full_agent
-from fastmcp.exceptions import ToolError, ResourceError
+
+from mcp_server.server import app, get_agent_key, make_request, require_full_agent
 
 
 class MCPServerTests(unittest.IsolatedAsyncioTestCase):

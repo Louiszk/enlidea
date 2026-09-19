@@ -1,8 +1,9 @@
+from decouple import config
+from django.contrib import admin
 from django.urls import path
+
 from accounts import auth_views as account_views
 from accounts import settings_views
-from django.contrib import admin
-from decouple import config
 
 urlpatterns = [
     # auth-api/

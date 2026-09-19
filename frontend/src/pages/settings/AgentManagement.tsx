@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchAgents, fetchCapabilities, checkAgentName } from '../../services/fetchService';
+import { fetchAgents, fetchCapabilities } from '../../services/fetchService';
 import { rotateAgentApiKey, deployAgent, updateAgent } from '../../services/mutateService';
 import { Spinner } from '../../components/Icons';
 import { useMessage } from '../../contexts/MessageContext';
 import Modal from '../../components/Modal';
-import { useDebounce } from 'use-debounce';
 import { Agent, AgentRequest, PatchedAgentRequest } from '../../api/generated/api';
+import { useAgentNameAvailability } from '../../hooks/useAgentNameAvailability';
 
 const AgentManagement = () => {
   const queryClient = useQueryClient();
@@ -18,41 +18,14 @@ const AgentManagement = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [newAgentName, setNewAgentName] = useState('');
-  const [debouncedName] = useDebounce(newAgentName, 500);
-  const [isNameAvailable, setIsNameAvailable] = useState<boolean | null>(null);
-  const [isCheckingName, setIsCheckingName] = useState(false);
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
+  const { availability: isNameAvailable, isChecking: isCheckingName } = useAgentNameAvailability(
+    newAgentName,
+    editingAgent?.name,
+  );
 
   // Store raw API keys that were just generated
   const [newKeys, setNewKeys] = useState<Record<number, string>>({});
-
-  useEffect(() => {
-    const validateName = async () => {
-      const trimmedName = debouncedName.trim();
-      if (trimmedName.length < 3) {
-        setIsNameAvailable(null);
-        return;
-      }
-
-      // If editing and name hasn't changed, it's automatically available
-      if (editingAgent && trimmedName.toLowerCase() === editingAgent.name.toLowerCase()) {
-          setIsNameAvailable(true);
-          return;
-      }
-
-      setIsCheckingName(true);
-      try {
-        const result = await checkAgentName(trimmedName);
-        setIsNameAvailable(result.available);
-      } catch (error) {
-        console.error("Failed to check name:", error);
-      } finally {
-        setIsCheckingName(false);
-      }
-    };
-
-    validateName();
-  }, [debouncedName, editingAgent]);
 
   const { data: agents, isLoading: isLoadingAgents } = useQuery({
     queryKey: ['agents'],
@@ -89,7 +62,6 @@ const AgentManagement = () => {
       setIsModalOpen(false);
       setNewAgentName('');
       setSelectedCapabilities([]);
-      setIsNameAvailable(null);
     },
     onError: (error) => {
       const errorMessage = (axios.isAxiosError(error) && error.response?.data?.detail) ? error.response.data.detail : error.message || 'Failed to deploy agent';     
@@ -106,7 +78,6 @@ const AgentManagement = () => {
       setEditingAgent(null);
       setNewAgentName('');
       setSelectedCapabilities([]);
-      setIsNameAvailable(null);
     },
     onError: (error) => {
       const errorMessage = (axios.isAxiosError(error) && error.response?.data?.detail) ? error.response.data.detail : error.message || 'Failed to update agent';
@@ -125,7 +96,6 @@ const AgentManagement = () => {
     setEditingAgent(null);
     setNewAgentName('');
     setSelectedCapabilities([]);
-    setIsNameAvailable(null);
     setIsModalOpen(true);
   };
 
@@ -133,7 +103,6 @@ const AgentManagement = () => {
     setEditingAgent(agent);
     setNewAgentName(agent.name);
     setSelectedCapabilities(agent.capabilities_detail?.map(c => c.slug) || []);
-    setIsNameAvailable(true); 
     setIsModalOpen(true);
   };
 
@@ -316,10 +285,7 @@ const AgentManagement = () => {
                     type="text"
                     maxLength={100}
                     value={newAgentName}
-                    onChange={(e) => {
-                        setNewAgentName(e.target.value);
-                        if (e.target.value.trim().length < 3) setIsNameAvailable(null);
-                    }}
+                    onChange={(e) => setNewAgentName(e.target.value)}
                     className={`w-full bg-gray-900 border ${
                         isNameAvailable === false ? 'border-red-500' : isNameAvailable === true ? 'border-green-500' : 'border-gray-700'
                     } rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 transition-colors pr-10`}

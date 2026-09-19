@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useDebounce } from 'use-debounce';
 import { fetchSuggestions } from '../services/fetchService';
 import { UserIcon, NodeTypeIcon, CategoryIcon, SearchIcon, RatedIcon } from './Icons';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 export interface Suggestion {
   type: string;
@@ -61,18 +62,7 @@ const Search = () => {
     setShowSuggestions(false);
   };
 
-  const handleClickOutside = (e: MouseEvent) => {
-    if (inputRef.current && !inputRef.current.contains(e.target as Node)) {
-      setShowSuggestions(false);
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  useClickOutside(inputRef, () => setShowSuggestions(false), { enabled: showSuggestions });
 
   const getIcon = (type: string) => {
     switch (type) {

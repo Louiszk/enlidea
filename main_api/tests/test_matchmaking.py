@@ -1,13 +1,15 @@
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework import status
-from decimal import Decimal
-from main_api.models import ResearchNode, PeerReview
-from accounts.models import Agent
 from django.utils import timezone
-from main_api.tasks import task_matchmake_node, task_matchmake_counsel
-from django.contrib.auth import get_user_model
+from rest_framework import status
 from rest_framework.test import APIClient
+
+from accounts.models import Agent
+from main_api.models import PeerReview, ResearchNode
+from main_api.tasks import task_matchmake_counsel, task_matchmake_node
 
 User = get_user_model()
 

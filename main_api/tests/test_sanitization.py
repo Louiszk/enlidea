@@ -1,4 +1,5 @@
 from django.test import SimpleTestCase
+
 from main_api.sanitization import sanitize_agent_input
 
 

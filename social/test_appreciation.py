@@ -1,11 +1,13 @@
-from typing import cast, Any
-from rest_framework.test import APITestCase
-from rest_framework import status
-from django.urls import reverse
-from django.contrib.auth import get_user_model
-from main_api.models import ResearchNode, Paper, NodeType
-from accounts.models import Agent
 from decimal import Decimal
+from typing import Any, cast
+
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from accounts.models import Agent
+from main_api.models import NodeType, Paper, ResearchNode
 
 User = get_user_model()
 

@@ -1,11 +1,25 @@
-from typing import cast, Any
-from rest_framework.test import APITestCase
-from rest_framework import status
-from django.urls import reverse
-from accounts.models import Account, Agent
-from main_api.models import ResearchNode, AgentDirective, NodeType
 import hashlib
 import time
+from decimal import Decimal
+from typing import Any, cast
+
+from django.db.models import F
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from accounts.models import Account, Agent
+from enlidea.constants import TREASURY_USERNAME
+from main_api.models import (
+    AgentDirective,
+    Bid,
+    Capability,
+    NodeType,
+    PeerReview,
+    ResearchNode,
+)
+from main_api.services import create_research_node
 
 
 class SyncEndpointTest(APITestCase):
@@ -55,9 +69,7 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_with_all_data_when_state_changes(self):
         # 1. Initial sync
-        directive1 = AgentDirective.objects.create(
-            maintainer=self.maintainer, agent=self.agent, content="Task 1", status="pending"
-        )
+        AgentDirective.objects.create(maintainer=self.maintainer, agent=self.agent, content="Task 1", status="pending")
 
         response = self.client.get(self.url)
         ts1 = cast(Any, response.data)["timestamp"]
@@ -117,9 +129,7 @@ class SyncEndpointTest(APITestCase):
         """Ensure directives with agent=None are only broadcasted to agents of the same maintainer."""
         # Create another maintainer and agent
         other_maintainer = Account.objects.create_user(email="other@test.com", username="other", password="password123")
-        other_agent = Agent.objects.create(
-            name="Other Agent", maintainer=other_maintainer, api_key_hash="hash2", orange_stars=50
-        )
+        Agent.objects.create(name="Other Agent", maintainer=other_maintainer, api_key_hash="hash2", orange_stars=50)
 
         # Other maintainer broadcasts a directive
         AgentDirective.objects.create(
@@ -139,8 +149,6 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_when_review_claimed(self):
         """Ensure claiming a review updates updated_at and triggers 200 OK on sync."""
-        from main_api.models import PeerReview
-
         node_type = NodeType.objects.create(name="Paper")
         node = ResearchNode.objects.create(title="Review Node", status="in_review", type=node_type)
         review = PeerReview.objects.create(assigned_reviewer=self.agent, research_node=node, status="pending")
@@ -152,8 +160,6 @@ class SyncEndpointTest(APITestCase):
 
         time.sleep(0.05)
         # Agent claims review
-        from django.utils import timezone
-
         review.status = "claimed"
         review.claimed_at = timezone.now()
         review.save(update_fields=["status", "claimed_at", "updated_at"])
@@ -166,7 +172,7 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_when_directive_completed(self):
         """Ensure completing a directive advances timestamp and returns 200 with updated list."""
-        d1 = AgentDirective.objects.create(maintainer=self.maintainer, agent=self.agent, content="D1", status="pending")
+        AgentDirective.objects.create(maintainer=self.maintainer, agent=self.agent, content="D1", status="pending")
         d2 = AgentDirective.objects.create(maintainer=self.maintainer, agent=self.agent, content="D2", status="pending")
 
         response = self.client.get(self.url)
@@ -187,8 +193,6 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_when_agent_capabilities_changed(self):
         """Ensure adding capabilities updates Agent.updated_at via signal and returns 200 on sync."""
-        from main_api.models import Capability
-
         cap = Capability.objects.create(title="Python", slug="python")
 
         response = self.client.get(self.url)
@@ -206,8 +210,6 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_when_worker_bid_rejected(self):
         """Ensure worker agent gets 200 OK sync when its submitted bid status is updated."""
-        from main_api.models import Bid
-
         node_type = NodeType.objects.create(name="Research")
         node = ResearchNode.objects.create(title="Bid Node", status="open", type=node_type)
         bid = Bid.objects.create(node=node, agent=self.agent, status="pending")
@@ -227,11 +229,6 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_when_maintainer_balance_changed(self):
         """Ensure agent gets 200 OK sync when maintainer Blue Star balance changes."""
-        from accounts.models import Account
-        from decimal import Decimal
-        from django.db.models import F
-        from django.utils import timezone
-
         response = self.client.get(self.url)
         data = cast(Any, response.data)
         ts_initial = data["timestamp"]
@@ -249,8 +246,6 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_when_m2m_cleared(self):
         """Ensure clearing M2M relationships (pre_clear) bumps timestamp and triggers 200 OK sync."""
-        from main_api.models import Capability
-
         cap = Capability.objects.create(title="GPU", slug="gpu")
         self.agent.capabilities.add(cap)
 
@@ -299,9 +294,6 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_two_agents_under_one_maintainer_balance_mutation(self):
         """Ensure Agent B gets 200 OK sync and updated balance when Agent A mutates maintainer balance."""
-        from decimal import Decimal
-        from main_api.tasks import TREASURY_USERNAME
-
         Account.objects.get_or_create(
             username=TREASURY_USERNAME,
             defaults={"email": "treasury@test.com", "balance_blue_stars": Decimal("1000.0000"), "is_active": True},
@@ -309,9 +301,7 @@ class SyncEndpointTest(APITestCase):
 
         raw_key_b = "test-api-key-b"
         hashed_key_b = hashlib.sha256(raw_key_b.encode()).hexdigest()
-        agent_b = Agent.objects.create(
-            name="Agent B", maintainer=self.maintainer, api_key_hash=hashed_key_b, is_active=True
-        )
+        Agent.objects.create(name="Agent B", maintainer=self.maintainer, api_key_hash=hashed_key_b, is_active=True)
 
         # Sync Agent B initially
         self.client.credentials(HTTP_X_AGENT_API_KEY=raw_key_b)
@@ -322,8 +312,6 @@ class SyncEndpointTest(APITestCase):
         initial_balance = data_b["balances"]["blue_stars"]
 
         # Agent A creates a node (deducting creation fee from shared maintainer)
-        from main_api.services import create_research_node
-
         time.sleep(0.05)
         node_type = NodeType.objects.create(name="Code")
         create_research_node(
@@ -345,8 +333,6 @@ class SyncEndpointTest(APITestCase):
 
     def test_sync_200_after_review_claim_endpoint(self):
         """Ensure claiming a review via endpoint response triggers 200 OK on sync."""
-        from main_api.models import PeerReview
-
         node_type = NodeType.objects.create(name="Paper")
         node = ResearchNode.objects.create(title="Review Claim Node", status="in_review", type=node_type)
         review = PeerReview.objects.create(assigned_reviewer=self.agent, research_node=node, status="pending")

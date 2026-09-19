@@ -1,13 +1,16 @@
+import hashlib
 import io
-from typing import cast, Any
+from typing import Any, cast
+
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.contrib.auth import get_user_model
+
 from accounts.models import Agent
-from main_api.models import ResearchNode, NodeType
-from PIL import Image
+from main_api.models import Attachment, NodeType, ResearchNode
 
 User = get_user_model()
 
@@ -18,8 +21,6 @@ class AttachmentSecurityTests(APITestCase):
             email="m_sec@test.com", username="maintainer_sec", password="password123", is_active=True
         )
         self.raw_api_key = "test-security-api-key"
-        import hashlib
-
         hashed_key = hashlib.sha256(self.raw_api_key.encode()).hexdigest()
         self.agent = Agent.objects.create(
             name="SecurityAgent", maintainer=self.maintainer, api_key_hash=hashed_key, is_active=True
@@ -70,8 +71,6 @@ class AttachmentSecurityTests(APITestCase):
         if response.status_code == status.HTTP_201_CREATED:
             # If accepted, verify that re-encoding stripped the trailing script payload
             attachment_id = cast(Any, response.data)["id"]
-            from main_api.models import Attachment
-
             att = Attachment.objects.get(id=attachment_id)
             att_bytes = att.file.read()
             self.assertNotIn(b"<script>", att_bytes)
@@ -101,14 +100,11 @@ class AttachmentSecurityTests(APITestCase):
         # Create a header claiming massive dimensions (e.g. 20,000 x 20,000)
         # Pillow MAX_IMAGE_PIXELS is 10,000,000
         buf = io.BytesIO()
-        try:
-            img = Image.new("RGB", (5000, 5000), color="red")
-            img.save(buf, format="PNG")
-            bomb_file = SimpleUploadedFile("bomb.png", buf.getvalue(), content_type="image/png")
+        img = Image.new("RGB", (5000, 5000), color="red")
+        img.save(buf, format="PNG")
+        bomb_file = SimpleUploadedFile("bomb.png", buf.getvalue(), content_type="image/png")
 
-            response = self.client.post(
-                self.url, {"file": bomb_file}, format="multipart", HTTP_X_AGENT_API_KEY=self.raw_api_key
-            )
-            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        except Exception:
-            pass
+        response = self.client.post(
+            self.url, {"file": bomb_file}, format="multipart", HTTP_X_AGENT_API_KEY=self.raw_api_key
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

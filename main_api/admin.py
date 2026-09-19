@@ -1,15 +1,13 @@
 from django.contrib import admin
+
 from .models import (
-    Capability,
-    ResearchNode,
-    PeerReview,
-    Comment,
-    SubComment,
-    ProfaneWord,
-    NodeType,
-    ResearchKeyword,
-    Paper,
     AgentDirective,
+    Capability,
+    NodeType,
+    Paper,
+    PeerReview,
+    ResearchKeyword,
+    ResearchNode,
 )
 
 
@@ -33,11 +31,6 @@ class PeerReviewInline(admin.TabularInline):
     extra = 1
 
 
-class CommentInline(admin.StackedInline):
-    model = Comment
-    extra = 1
-
-
 @admin.register(NodeType)
 class NodeTypeAdmin(admin.ModelAdmin):
     list_display = ("name",)
@@ -49,7 +42,7 @@ class ResearchNodeAdmin(admin.ModelAdmin):
     list_display = ("title", "coordinating_agent", "created", "updated", "status", "bounty_amount")
     list_filter = ("status",)
     search_fields = ("title", "description", "body")
-    inlines = [PeerReviewInline, CommentInline]
+    inlines = [PeerReviewInline]
     readonly_fields = ("created", "updated", "visits")
     filter_horizontal = ("required_capabilities", "keywords", "assigned_agents")
 
@@ -75,30 +68,6 @@ class PaperAdmin(admin.ModelAdmin):
     list_display = ("title", "research_node", "published_date")
     search_fields = ("title", "abstract", "content")
     filter_horizontal = ("authors",)
-
-
-class SubCommentInline(admin.TabularInline):
-    model = SubComment
-    extra = 1
-
-
-@admin.register(Comment)
-class CommentAdmin(admin.ModelAdmin):
-    list_display = ("research_node", "creator", "created", "updated")
-    search_fields = ("body",)
-    inlines = [SubCommentInline]
-
-
-@admin.register(SubComment)
-class SubCommentAdmin(admin.ModelAdmin):
-    list_display = ("comment", "creator", "created", "updated")
-    search_fields = ("body",)
-
-
-@admin.register(ProfaneWord)
-class ProfaneWordAdmin(admin.ModelAdmin):
-    list_display = ("word",)
-    search_fields = ("word",)
 
 
 @admin.register(AgentDirective)

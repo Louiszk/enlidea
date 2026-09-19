@@ -1,35 +1,35 @@
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.response import Response
-from rest_framework import status, serializers
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
+import logging
+import math
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
-from accounts.models import Agent, Account
-from accounts.authentication import CookieJWTAuthentication
-from main_api.models import ResearchNode, Paper, Trend
-from main_api.authentication import AgentApiKeyAuthentication
-from main_api.permissions import IsNotPublicAgent
-from .models import Notification, Appreciation, Report, Complaint
-from .serializers import NotificationSerializer, FollowSerializer, ReportSerializer, ComplaintSerializer
-from main_api.serializer import ResearchNodeCardSerializer, AgentSerializer, PaperSerializer
-from django.db.models import F, Sum, Q
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db import transaction
-from django.utils import timezone
+from django.db.models import F, Q, Sum
 from django.shortcuts import get_object_or_404
-import math
-import logging
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 
-from .services import evaluate_auto_kick
-from decimal import Decimal
+from accounts.authentication import CookieJWTAuthentication
+from accounts.models import Account, Agent
+from enlidea.constants import APPRECIATION_BS_REWARD, PUBLIC_POOL_USERNAME, TREASURY_USERNAME
+from main_api.authentication import AgentApiKeyAuthentication
+from main_api.models import Paper, ResearchNode, Trend
+from main_api.permissions import IsNotPublicAgent
+from main_api.serializer import AgentSerializer, PaperSerializer, ResearchNodeCardSerializer
+from main_api.services import evaluate_auto_kick
+
+from .models import Appreciation, Complaint, Notification, Report
+from .serializers import ComplaintSerializer, FollowSerializer, NotificationSerializer, ReportSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-
-# Constants for Tokenomics
-TREASURY_USERNAME = "System_Treasury"
-APPRECIATION_BS_REWARD = Decimal("2.0000")
 
 
 @extend_schema(
@@ -95,7 +95,7 @@ def appreciate_paper(request, paper_id):
     impact = Decimal(str(impact_raw)).quantize(Decimal("0.0001"))
 
     with transaction.atomic():
-        obj, created = Appreciation.objects.update_or_create(
+        _appreciation, created = Appreciation.objects.update_or_create(
             user=request.user, paper=paper, defaults={"vote": vote, "impact": impact}
         )
         total_score = paper.appreciations.aggregate(total=Sum("impact"))["total"] or 0.0
@@ -132,7 +132,7 @@ def appreciate_paper(request, paper_id):
                     else:
                         logger.warning(f"Treasury dry! Could not reward curation for user {request.user.id}")
                 except Exception as e:
-                    logger.error(f"Error rewarding curation: {str(e)}")
+                    logger.error(f"Error rewarding curation: {e!s}")
 
     return Response({"appreciation_score": total_score, "user_vote": vote}, status=status.HTTP_200_OK)
 
@@ -167,7 +167,7 @@ def follow_user(request, user_id):
         user_to_follow = User.objects.get(id=user_id)
 
         # Hide Treasury and Public Pool
-        if user_to_follow.username in [TREASURY_USERNAME, "Public_Pool"]:
+        if user_to_follow.username in [TREASURY_USERNAME, PUBLIC_POOL_USERNAME]:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if request.user == user_to_follow:
@@ -278,8 +278,6 @@ def home_feed(request, user_id):
                 .order_by("-created")
             )
 
-    from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-
     paginator = Paginator(queryset, items_per_page)
     try:
         current_page = paginator.page(page)
@@ -369,8 +367,8 @@ def save_node(request, node_id):
                 node_obj = ResearchNode.objects.get(id=node_id)
                 trend, _ = Trend.objects.get_or_create(research_node=node_obj)
                 trend.update_metrics(saves=1)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to update save trend metric for node %s: %s", node_id, e)
 
     return Response({"message": message, "saved": is_saved}, status=status.HTTP_200_OK)
 
@@ -437,14 +435,11 @@ def save_paper(request, paper_id):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def leaderboard(request):
-    from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-    from main_api.tasks import TREASURY_USERNAME
-
     page = request.GET.get("page", 1)
     items_per_page = 10
     top_agents = (
         Agent.objects.filter(is_active=True)
-        .exclude(maintainer__username="Public_Pool")
+        .exclude(maintainer__username=PUBLIC_POOL_USERNAME)
         .exclude(maintainer__username=TREASURY_USERNAME)
         .order_by("-orange_stars")
     )

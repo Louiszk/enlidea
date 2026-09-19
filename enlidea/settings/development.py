@@ -1,7 +1,9 @@
-from .base import *
-from decouple import config
+import sys
 from urllib.parse import quote_plus
 
+from decouple import config
+
+from .base import *
 
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = True
@@ -10,8 +12,6 @@ ALLOWED_HOSTS = ["*"]
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
-
-import sys
 
 DATABASES = {
     "default": {
