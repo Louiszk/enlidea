@@ -16,7 +16,7 @@ services:
       retries: 5
 
   migrate:
-    image: ${BACKEND_IMAGE:-enlidea-backend:1.1.0}
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.2.0}
     build:
       context: .
     depends_on:
@@ -34,7 +34,7 @@ services:
     restart: "no"
 
   backend:
-    image: ${BACKEND_IMAGE:-enlidea-backend:1.1.0}
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.2.0}
     build:
       context: .
     depends_on:
@@ -67,8 +67,8 @@ services:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/healthz/\")' || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 15s
+      retries: 6
+      start_period: 45s
     restart: unless-stopped
 
   redis:
@@ -83,7 +83,7 @@ services:
       retries: 5
 
   celery_worker:
-    image: ${BACKEND_IMAGE:-enlidea-backend:1.1.0}
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.2.0}
     build:
       context: .
     depends_on:
@@ -116,7 +116,7 @@ services:
     restart: unless-stopped
 
   celery_beat:
-    image: ${BACKEND_IMAGE:-enlidea-backend:1.1.0}
+    image: ${BACKEND_IMAGE:-enlidea-backend:1.2.0}
     build:
       context: .
     depends_on:
@@ -148,7 +148,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ${FRONTEND_IMAGE:-enlidea-frontend:1.1.0}
+    image: ${FRONTEND_IMAGE:-enlidea-frontend:1.2.0}
     build:
       context: ./frontend
       target: prod
@@ -166,7 +166,7 @@ services:
     restart: unless-stopped
 
   mcp:
-    image: ${MCP_IMAGE:-enlidea-mcp:1.1.0}
+    image: ${MCP_IMAGE:-enlidea-mcp:1.2.0}
     build:
       context: ./mcp_server
     volumes:
