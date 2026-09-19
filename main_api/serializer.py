@@ -1,4 +1,3 @@
-import re
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -19,14 +18,11 @@ from .models import (
     Attachment,
     Bid,
     Capability,
-    Comment,
     NodeType,
     Paper,
     PeerReview,
-    ProfaneWord,
     ResearchKeyword,
     ResearchNode,
-    SubComment,
 )
 from .sanitization import sanitize_agent_input, sanitize_json_payload
 from .services import process_and_validate_attachment_image
@@ -52,11 +48,6 @@ class AgentMessageSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) > 4000:
             raise serializers.ValidationError("Message content must be under 4000 characters.")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
         return value
 
 
@@ -212,17 +203,6 @@ class AgentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Agent name must be under 100 characters.")
         if not value.strip():
             raise serializers.ValidationError("Agent name cannot be empty.")
-
-        # Profanity check for agent names with cache & regex word boundaries
-        profane_words = cache.get("profane_words")
-        if profane_words is None:
-            profane_words = list(ProfaneWord.objects.values_list("word", flat=True))
-            cache.set("profane_words", profane_words, 3600)
-
-        value_lower = value.lower()
-        for word in profane_words:
-            if re.search(r"\b" + re.escape(word.lower()) + r"\b", value_lower):
-                raise serializers.ValidationError(f"The name contains profane language: '{word}'")
         return value
 
     @extend_schema_field(serializers.BooleanField())
@@ -474,56 +454,7 @@ class AgentDirectiveSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) > 10000:
             raise serializers.ValidationError("Directive content must be under 10000 characters.")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
         return value
-
-
-class CommentSerializer(serializers.ModelSerializer):
-    creator = AgentSerializer(read_only=True)
-
-    class Meta:
-        model = Comment
-        fields = ["id", "created", "creator", "updated", "body", "research_node"]
-
-    def validate_body(self, value):
-        # Apply loose sanitization
-        value = sanitize_agent_input(value, apply_nfkc=False)
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
-        return value
-
-
-class SubCommentSerializer(serializers.ModelSerializer):
-    creator = UserSerializer(read_only=True)
-
-    class Meta:
-        model = SubComment
-        fields = ["id", "created", "creator", "updated", "body", "comment"]
-
-    def validate_body(self, value):
-        # Sub-comments are usually from maintainers (humans), but we sanitize anyway
-        value = sanitize_agent_input(value, apply_nfkc=True)
-        if len(value) > 5000:
-            raise serializers.ValidationError("Sub-comment body must be under 5000 characters.")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
-        return value
-
-
-class ProfaneWordSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProfaneWord
-        fields = ["id", "word"]
 
 
 class PeerReviewSubmissionSerializer(serializers.ModelSerializer):
@@ -552,11 +483,6 @@ class PeerReviewSubmissionSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) > 10000:
             raise serializers.ValidationError("Detailed comments must be under 10000 characters.")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
         return value
 
 
@@ -603,11 +529,6 @@ class PeerReviewSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) > 10000:
             raise serializers.ValidationError("Detailed comments must be under 10000 characters.")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
         return value
 
     def validate_structured_data(self, value):
@@ -643,26 +564,18 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["status", "deadline"]
 
-    def validate_profanity(self, text):
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in text.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
-
     def validate_title(self, value):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) <= 10:
             raise serializers.ValidationError("Title must be over 10 characters")
         if len(value) > 80:
             raise serializers.ValidationError("Title must be under 80 characters")
-        self.validate_profanity(value)
         return value
 
     def validate_description(self, value):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) > 5000:
             raise serializers.ValidationError("Description must be under 5000 characters.")
-        self.validate_profanity(value)
         return value
 
     def validate_body(self, value):
@@ -671,14 +584,12 @@ class CreateResearchNodeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Content must be over 140 characters")
         if len(value) > 50000:
             raise serializers.ValidationError("Content must be under 50000 characters")
-        self.validate_profanity(value)
         return value
 
     def validate_interview_prompt(self, value):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) > 2000:
             raise serializers.ValidationError("Interview prompt must be under 2000 characters.")
-        self.validate_profanity(value)
         return value
 
     def validate_keywords(self, value):
@@ -780,26 +691,18 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
             "interview_prompt",
         ]
 
-    def validate_profanity(self, text):
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in text.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
-
     def validate_title(self, value):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) <= 10:
             raise serializers.ValidationError("Title must be over 10 characters")
         if len(value) > 80:
             raise serializers.ValidationError("Title must be under 80 characters")
-        self.validate_profanity(value)
         return value
 
     def validate_description(self, value):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) > 5000:
             raise serializers.ValidationError("Description must be under 5000 characters.")
-        self.validate_profanity(value)
         return value
 
     def validate_body(self, value):
@@ -808,14 +711,12 @@ class EditResearchNodeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Content must be over 140 characters")
         if len(value) > 50000:
             raise serializers.ValidationError("Content must be under 50000 characters")
-        self.validate_profanity(value)
         return value
 
     def validate_interview_prompt(self, value):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) > 2000:
             raise serializers.ValidationError("Interview prompt must be under 2000 characters.")
-        self.validate_profanity(value)
         return value
 
     def validate_keywords(self, value):
@@ -935,11 +836,6 @@ class ResearchNodePlanSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=True)
         if len(value) > 10000:
             raise serializers.ValidationError("Coordination plan must be under 10000 characters.")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
         return value
 
 
@@ -956,11 +852,6 @@ class BidSerializer(serializers.ModelSerializer):
         value = sanitize_agent_input(value, apply_nfkc=False)
         if len(value) > 2000:
             raise serializers.ValidationError("Interview response must be under 2000 characters.")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The response contains profane language: '{word}'")
         return value
 
 
@@ -1004,9 +895,4 @@ class ResearchNodeBodySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Content must be over 140 characters")
         if len(value) > 10000:
             raise serializers.ValidationError("Content must be under 10000 characters")
-
-        profane_words = ProfaneWord.objects.values_list("word", flat=True)
-        for word in profane_words:
-            if word.lower() in value.lower():
-                raise serializers.ValidationError(f"The text contains profane language: '{word}'")
         return value

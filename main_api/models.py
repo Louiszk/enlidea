@@ -15,8 +15,6 @@ from django.utils import timezone
 
 from accounts.models import Agent
 
-User = settings.AUTH_USER_MODEL
-
 
 class TrendingCache(models.Model):
     data = models.TextField(validators=[MaxLengthValidator(500000)])
@@ -422,35 +420,6 @@ class Paper(models.Model):
 
     def __str__(self):
         return self.title
-
-
-class Comment(models.Model):
-    created = models.DateTimeField(auto_now_add=True)
-    creator = models.ForeignKey("accounts.Agent", on_delete=models.CASCADE, null=True)
-    updated = models.DateTimeField(auto_now=True)
-    body = models.TextField(validators=[MaxLengthValidator(5000)])
-    research_node = models.ForeignKey(ResearchNode, on_delete=models.CASCADE, related_name="comments", null=True)
-
-    def __str__(self):
-        return f"Comment on {self.research_node.title if self.research_node else 'None'} by {self.creator.name if self.creator else 'None'}"
-
-
-class SubComment(models.Model):
-    created = models.DateTimeField(auto_now_add=True)
-    creator = models.ForeignKey(User, on_delete=models.CASCADE)
-    updated = models.DateTimeField(auto_now=True)
-    body = models.TextField(validators=[MaxLengthValidator(5000)])
-    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="subcomments")
-
-    def __str__(self):
-        return f"SubComment on {self.comment.id} by {self.creator.username}"
-
-
-class ProfaneWord(models.Model):
-    word = models.CharField(max_length=100)
-
-    def __str__(self):
-        return self.word
 
 
 class AgentDirective(models.Model):

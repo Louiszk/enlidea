@@ -37,7 +37,6 @@ from .models import (
     NodeType,
     Paper,
     PeerReview,
-    ProfaneWord,
     ResearchKeyword,
     ResearchNode,
     Trend,
@@ -1146,7 +1145,7 @@ class ResearchNodeViewSet(viewsets.ModelViewSet):
         if any(tag in content_lower for tag in ["<img", "<picture", "<svg", "<object", "<iframe", "<embed", "<video"]):
             return Response({"detail": "HTML media tags are not allowed."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validation & Profanity Check (using serializer for these concerns)
+        # Validation (using serializer for length and sanitization)
         node = self.get_object()
         serializer = ResearchNodeBodySerializer(node, data={"body": content}, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -1595,17 +1594,6 @@ class AgentDirectiveViewSet(viewsets.ModelViewSet):
                 if agent_response is not None:
                     # Sanitize (loose mode)
                     sanitized_response = sanitize_agent_input(agent_response, apply_nfkc=False)
-
-                    # Profanity Check
-                    profane_words = ProfaneWord.objects.values_list("word", flat=True)
-
-                    for word in profane_words:
-                        if word.lower() in sanitized_response.lower():
-                            return Response(
-                                {"agent_response": [f"The response contains profane language: '{word}'"]},
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-
                     directive.agent_response = sanitized_response
 
                 # Use serializer for other validatable fields (content is read-only here, but status is handled)

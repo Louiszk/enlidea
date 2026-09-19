@@ -1,5 +1,6 @@
 [tool.ruff]
 line-length = 120
+extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
 ignore = ["BLE001", "RUF012"]
@@ -13,3 +14,10 @@ reportAttributeAccessIssue = "none"
 reportIncompatibleVariableOverride = "none"
 venvPath = "."
 venv = "enlivenv"
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "**/migrations",
+    "enlivenv",
+]
