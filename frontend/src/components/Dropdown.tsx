@@ -1,23 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Account } from '../api/generated/api';
 import { Link } from 'react-router-dom';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 const Dropdown = ({ user, elements }: { user: Account; elements: { route: string; name: string }[] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleClickOutside = (event: MouseEvent) => {
-    if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-      setIsOpen(false);
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  useClickOutside(dropdownRef, () => setIsOpen(false), { enabled: isOpen });
 
   return (
     <div className="relative" ref={dropdownRef}>

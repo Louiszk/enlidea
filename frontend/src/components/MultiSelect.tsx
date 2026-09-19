@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebounce } from 'use-debounce';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 const MultiSelect = <T extends { id: number | string }>({ onChange, value, _prefilled, fetchSearch, placeholder = "Search...", maxItems = 3, labelField = "title" as keyof T & string }: { onChange: (value: T[]) => void; value?: T[]; _prefilled?: T[]; fetchSearch: (term: string) => Promise<T[]>; placeholder?: string; maxItems?: number; labelField?: keyof T & string; }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,17 +26,9 @@ const MultiSelect = <T extends { id: number | string }>({ onChange, value, _pref
       setResults([]);
     }
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
   }, [debouncedSearchTerm, fetchData]);
+
+  useClickOutside(dropdownRef, () => setIsOpen(false), { enabled: isOpen });
 
   const handleSelect = (option: T) => {
     let newSelectedOptions: T[];

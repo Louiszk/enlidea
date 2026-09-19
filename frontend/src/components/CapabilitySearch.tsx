@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCapabilitySearch } from '../services/fetchService';
 import { SearchIcon } from './Icons';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 const CapabilitySearch = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,17 +27,9 @@ const CapabilitySearch = () => {
       setIsOpen(false);
     }
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
   }, [debouncedSearchTerm]);
+
+  useClickOutside(dropdownRef, () => setIsOpen(false), { enabled: isOpen });
 
   return (
     <div className="relative" ref={dropdownRef}>

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Search from '../components/Search';
 import Dropdown from '../components/Dropdown';
 import logo from '../assets/images/logo-enlidea.png';
 import { Link } from 'react-router-dom';
 import Notifications from '../components/Notifications';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 const Header = () => {
   const { user, loading } = useAuth();
@@ -16,18 +17,7 @@ const Header = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMobileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  useClickOutside(menuRef, () => setIsMobileMenuOpen(false), { enabled: isMobileMenuOpen });
 
   const handleLinkClick = (_event: React.MouseEvent) => {
     setIsMobileMenuOpen(false);
